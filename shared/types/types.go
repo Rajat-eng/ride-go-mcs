@@ -15,14 +15,12 @@ type Coordinate struct {
 	Longitude float64 `json:"longitude"`
 }
 
-type ErrorResponse struct {
-	Status  string   `json:"status"`
-	Message string   `json:"message"`
-	Errors  []string `json:"errors,omitempty"`
-}
-
-type SuccessResponse struct {
-	Status  string      `json:"status"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
+type OSRMApiResponse struct {
+	Routes []struct {
+		Distance float64 `json:"distance"`
+		Duration float64 `json:"duration"`
+		Geometry struct {
+			Coordinates [][]float64 `json:"coordinates"`
+		} `json:"geometry"`
+	} `json:"routes"`
 }

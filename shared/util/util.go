@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"ride-sharing/shared/types"
+	"ride-sharing/shared/contracts"
 
 	"github.com/go-playground/validator/v10"
 )
@@ -15,7 +15,7 @@ func GetRandomAvatar(index int) string {
 }
 
 func RespondWithError(w http.ResponseWriter, code int, message string, errors []string) {
-	response := types.ErrorResponse{
+	response := contracts.ErrorResponse{
 		Status:  "error",
 		Message: message,
 		Errors:  errors,
@@ -24,7 +24,7 @@ func RespondWithError(w http.ResponseWriter, code int, message string, errors []
 }
 
 func RespondWithSuccess(w http.ResponseWriter, code int, message string, data interface{}) {
-	response := types.SuccessResponse{
+	response := contracts.SuccessResponse{
 		Status:  "success",
 		Message: message,
 		Data:    data,
