@@ -20,7 +20,7 @@ export function useRiderStreamConnection(location: Coordinate, userID: string) {
       // Send initial location
       if (location) {
         ws.send(JSON.stringify({
-          type: TripEvents.DriverLocation,
+          type: TripEvents.DriverLocation, // Reusing DriverLocation event to send rider location
           data: {
             location,
           }

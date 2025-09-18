@@ -39,8 +39,8 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
     const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const location = {
-        latitude: 37.7749,
-        longitude: -122.4194,
+        latitude: 12.920422,
+        longitude: 77.611008,
     };
 
     const {
@@ -71,6 +71,12 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
                 destination: [e.latlng.lat, e.latlng.lng],
             })
             console.log(data)
+
+            if(data["route"]==null){
+                alert("No route found. Please select a different destination.");
+                setDestination(null);
+                return;
+            }
 
             const parsedRoute = data.route.geometry[0].coordinates
                 .map((coord) => [coord.longitude, coord.latitude] as [number, number])

@@ -30,6 +30,8 @@ func (s *HttpHandler) HandleTripPreview(w http.ResponseWriter, r *http.Request) 
 	t, err := s.Service.GetRoute(ctx, &reqBody.Pickup, &reqBody.Destination)
 	if err != nil {
 		log.Println("error in getting route", err)
+		http.Error(w, "failed to get route", http.StatusInternalServerError) // 500 - internal server error
+		return
 	}
 	writeJSON(w, http.StatusOK, t)
 }

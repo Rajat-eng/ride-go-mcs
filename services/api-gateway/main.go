@@ -28,7 +28,10 @@ func main() {
 	})
 
 	// Route for trip preview
-	mux.HandleFunc("POST /trip/preview", HandleTripPreview)
+	mux.HandleFunc("POST /trip/preview", enableCORS(HandleTripPreview))
+
+	mux.HandleFunc("/ws/drivers", handleDriversWebSocket)
+	mux.HandleFunc("/ws/riders", handleRidersWebSocket)
 
 	server := &http.Server{
 		Addr:    httpAddr,
@@ -39,7 +42,7 @@ func main() {
 	serverErrors := make(chan error, 1)
 	go func() {
 		log.Printf("HTTP server listening on %s", server.Addr)
-		serverErrors <- server.ListenAndServe() //
+		serverErrors <- server.ListenAndServe()
 	}()
 	// goroutine to start the server.This allows the main goroutine to continue executing and listen for shutdown signals
 
