@@ -54,3 +54,32 @@ func HandleTripPreview(w http.ResponseWriter, r *http.Request) {
 
 	util.RespondWithSuccess(w, http.StatusOK, "Trip Preview", tripPreview)
 }
+
+func HandleStartTrip(w http.ResponseWriter, r *http.Request) {
+	var reqBody StartTripRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+	// validation
+	if err := types.Validate.Struct(reqBody); err != nil {
+		validationErrors := err.(validator.ValidationErrors)
+		errors := make([]string, len(validationErrors))
+		for i, err := range validationErrors {
+			errors[i] = util.FormatValidationError(err)
+		}
+		util.RespondWithError(w, http.StatusBadRequest, "Validation failed", errors)
+		return
+	}
+	tripService, err := grpc_clients.NewTripServiceClient()
+	if err != nil {
+		log.Fatal(err)
+	}
+	trip, err := tripService.Client.CreateTrip(r.Context(), reqBody.toProto())
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	util.RespondWithSuccess(w, http.StatusOK, "Trip Started", trip)
+}

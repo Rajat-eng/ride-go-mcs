@@ -29,6 +29,7 @@ func main() {
 
 	// Route for trip preview
 	mux.HandleFunc("POST /trip/preview", enableCORS(HandleTripPreview))
+	mux.HandleFunc("POST /trip/start", enableCORS(HandleStartTrip))
 
 	mux.HandleFunc("/ws/drivers", handleDriversWebSocket)
 	mux.HandleFunc("/ws/riders", handleRidersWebSocket)

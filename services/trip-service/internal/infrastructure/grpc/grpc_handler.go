@@ -51,8 +51,15 @@ func (h *gRPCHandler) PreviewTrip(ctx context.Context, req *pb.PreviewTripReques
 		return nil, status.Errorf(codes.Internal, "failed to get route: %v", err)
 	}
 
+	// estimate ride fares based on the route
+	// store the route and ride fares in the response
+
 	return &pb.PreviewTripResponse{
 		Route:     t.ToProto(),
 		RideFares: []*pb.RideFare{},
 	}, nil
+}
+
+func (h *gRPCHandler) CreateTrip(ctx context.Context, req *pb.CreateTripRequest) (*pb.CreateTripResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CreateTrip not implemented")
 }
