@@ -23,16 +23,6 @@ func toProtoCoordinate(c types.Coordinate) *pb.Coordinate {
 	}
 }
 
-type tripRequestFactory struct{}
-
-type ProtoRequestFactory interface {
-	toProto(req interface{}) (interface{}, error)
-}
-
-func NewTripRequestFactory() *tripRequestFactory {
-	return &tripRequestFactory{}
-}
-
 func (p *PreviewTripRequest) toProto() *pb.PreviewTripRequest {
 	return &pb.PreviewTripRequest{
 		UserID:        p.UserID,

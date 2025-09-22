@@ -51,7 +51,7 @@ func main() {
 	serverErrors := make(chan error, 2)
 
 	grpcServer := grpcserver.NewServer()
-	grpc.NewGRPCHandler(grpcServer, TripService)
+	grpc.NewGRPCHandler(grpcServer, TripService) // register grpc handler with grpc server and trip service
 
 	httpServer := &http.Server{
 		Addr:    HttpAddr,

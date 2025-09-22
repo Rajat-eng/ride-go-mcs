@@ -17,9 +17,11 @@ import (
 )
 
 type gRPCHandler struct {
-	pb.UnimplementedTripServiceServer
-
-	service domain.TripService
+	pb.UnimplementedTripServiceServer // this is for forward compatibility meaning if we add new methods in future it will not break existing implementations
+	// we need to implement all methods of TripServiceServer interface
+	// so we embed UnimplementedTripServiceServer struct which has default implementations of all methods
+	//like CreateTrip and PreviewTrip
+	service domain.TripService // this is our domain service which has business logic
 }
 
 func NewGRPCHandler(server *grpc.Server, service domain.TripService) *gRPCHandler {
@@ -27,7 +29,7 @@ func NewGRPCHandler(server *grpc.Server, service domain.TripService) *gRPCHandle
 		service: service,
 	}
 
-	pb.RegisterTripServiceServer(server, handler)
+	pb.RegisterTripServiceServer(server, handler) // register our handler with grpc server
 	return handler
 }
 
@@ -35,7 +37,7 @@ func (h *gRPCHandler) CreateTrip(ctx context.Context, req *pb.CreateTripRequest)
 	fareID := req.GetRideFareID()
 	userID := req.GetUserID()
 
-	rideFare, err := h.service.GetAndValidateFare(ctx, fareID, userID)
+	rideFare, err := h.service.GetAndValidateFare(ctx, fareID, userID) // get fare from db and validate userID matches
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to validate the fare: %v", err)
 	}
@@ -67,7 +69,7 @@ func (h *gRPCHandler) PreviewTrip(ctx context.Context, req *pb.PreviewTripReques
 
 	userID := req.GetUserID()
 
-	t, err := h.service.GetRoute(ctx, pickupCoord, destinationCoord)
+	route, err := h.service.GetRoute(ctx, pickupCoord, destinationCoord)
 	// it gives osrm response--> need to convert to pb response
 	if err != nil {
 		log.Println(err)
@@ -76,16 +78,16 @@ func (h *gRPCHandler) PreviewTrip(ctx context.Context, req *pb.PreviewTripReques
 
 	// estimate ride fares based on the route
 	// store the route and ride fares in the response
-	estimatedFares, _ := h.service.EstimatePackagePriceWithRoute(t)
+	estimatedFares, _ := h.service.EstimatePackagePriceWithRoute(route)
 
-	fares, faresErr := h.service.GenerateTripFares(ctx, estimatedFares, userID)
+	fares, faresErr := h.service.GenerateTripFares(ctx, estimatedFares, userID, route) // store in db and return with trip
 
 	if faresErr != nil {
 		return nil, status.Errorf(codes.Internal, "failed to generate the ride fares: %v", err)
 	}
 
 	return &pb.PreviewTripResponse{
-		Route:     t.ToProto(),
+		Route:     route.ToProto(),
 		RideFares: domain.ToRideFaresProto(fares),
 	}, nil
 }

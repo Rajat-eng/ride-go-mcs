@@ -5,8 +5,6 @@ import (
 	tripTypes "ride-sharing/services/trip-service/pkg/types"
 	"ride-sharing/shared/types"
 
-	pb "ride-sharing/shared/proto/trip"
-
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -17,7 +15,14 @@ type TripModel struct {
 	To       string
 	Status   string
 	RideFare *RideFareModel
-	Driver   *pb.TripDriver
+	Driver   *TripDriver //*pb.TripDriver
+}
+
+type TripDriver struct {
+	id             string
+	name           string
+	profilePicture string
+	carPlate       string
 }
 
 type TripRepository interface {
@@ -29,6 +34,6 @@ type TripService interface {
 	CreateTrip(ctx context.Context, fare *RideFareModel) (*TripModel, error)
 	GetRoute(ctx context.Context, pickup, destination *types.Coordinate) (*tripTypes.OSRMApiResponse, error)
 	EstimatePackagePriceWithRoute(route *tripTypes.OSRMApiResponse) ([]*RideFareModel, error)
-	GenerateTripFares(ctx context.Context, fares []*RideFareModel, userID string) ([]*RideFareModel, error)
+	GenerateTripFares(ctx context.Context, fares []*RideFareModel, userID string, route *tripTypes.OSRMApiResponse) ([]*RideFareModel, error)
 	GetAndValidateFare(ctx context.Context, fareID, userID string) (*RideFareModel, error)
 }

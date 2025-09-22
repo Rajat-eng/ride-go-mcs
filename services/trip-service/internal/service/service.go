@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"ride-sharing/services/trip-service/internal/domain"
 	tripTypes "ride-sharing/services/trip-service/pkg/types"
-	"ride-sharing/shared/proto/trip"
 	"ride-sharing/shared/types"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -32,7 +31,7 @@ func (s *TripService) CreateTrip(ctx context.Context, fare *domain.RideFareModel
 		To:       "",
 		RideFare: fare, // * gives value stored at address fare
 		Status:   "pending",
-		Driver:   &trip.TripDriver{},
+		Driver:   &domain.TripDriver{},
 	}
 	return s.repo.CreateTrip(ctx, t)
 }
@@ -93,7 +92,7 @@ func (s *TripService) EstimatePackagePriceWithRoute(route *tripTypes.OSRMApiResp
 	for i, f := range baseFares {
 		estimatedFares[i] = estimateFareRoute(f, route)
 	}
-
+	// estimatedFares is slice of RideFareModel pointers which gives fare for various packages
 	return estimatedFares, nil
 }
 
@@ -114,17 +113,19 @@ func estimateFareRoute(f *domain.RideFareModel, route *tripTypes.OSRMApiResponse
 	}
 }
 
-func (s *TripService) GenerateTripFares(ctx context.Context, rideFares []*domain.RideFareModel, userID string) ([]*domain.RideFareModel, error) {
+func (s *TripService) GenerateTripFares(ctx context.Context, rideFares []*domain.RideFareModel, userID string, route *tripTypes.OSRMApiResponse) ([]*domain.RideFareModel, error) {
+	// for each estimate route package fare create a RideFareModel and save to db on preview trip with stored userID
 	fares := make([]*domain.RideFareModel, len(rideFares))
 
 	for i, f := range rideFares {
-		id := primitive.NewObjectID()
+		id := primitive.NewObjectID() // id for RideFareModel
 
 		fare := &domain.RideFareModel{
 			UserID:            userID,
 			ID:                id,
 			TotalPriceInCents: f.TotalPriceInCents,
 			PackageSlug:       f.PackageSlug,
+			Route:             route,
 		}
 
 		if err := s.repo.SaveRideFare(ctx, fare); err != nil {
@@ -140,20 +141,20 @@ func (s *TripService) GenerateTripFares(ctx context.Context, rideFares []*domain
 func getBaseFares() []*domain.RideFareModel {
 	return []*domain.RideFareModel{
 		{
-			PackageSlug:       "suv",
-			TotalPriceInCents: 200,
+			PackageSlug:       "Bike",
+			TotalPriceInCents: 100,
 		},
 		{
-			PackageSlug:       "sedan",
-			TotalPriceInCents: 350,
+			PackageSlug:       "Auto",
+			TotalPriceInCents: 150,
 		},
 		{
-			PackageSlug:       "van",
+			PackageSlug:       "Mini",
+			TotalPriceInCents: 250,
+		},
+		{
+			PackageSlug:       "Luxury",
 			TotalPriceInCents: 400,
-		},
-		{
-			PackageSlug:       "luxury",
-			TotalPriceInCents: 1000,
 		},
 	}
 }

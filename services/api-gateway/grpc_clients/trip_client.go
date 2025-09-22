@@ -10,8 +10,8 @@ import (
 )
 
 type TripServiceClient struct {
-	Client pb.TripServiceClient
-	conn   *grpc.ClientConn
+	Client pb.TripServiceClient // this is grpc client which creates connection to trip service
+	conn   *grpc.ClientConn     // connection object to trip service
 }
 
 func NewTripServiceClient() (*TripServiceClient, error) {
@@ -26,7 +26,7 @@ func NewTripServiceClient() (*TripServiceClient, error) {
 		return nil, err
 	}
 
-	client := pb.NewTripServiceClient(conn) // client is grpc client
+	client := pb.NewTripServiceClient(conn) // this gives trip service client object to call trip service methods like CreateTrip, PreviewTrip
 	return &TripServiceClient{Client: client, conn: conn}, nil
 
 }
