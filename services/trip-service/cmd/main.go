@@ -10,6 +10,8 @@ import (
 	"ride-sharing/services/trip-service/internal/infrastructure/grpc"
 	"ride-sharing/services/trip-service/internal/infrastructure/repository"
 	"ride-sharing/services/trip-service/internal/service"
+	"ride-sharing/shared/env"
+	"ride-sharing/shared/messaging"
 	"syscall"
 	"time"
 
@@ -24,6 +26,15 @@ const (
 func main() {
 	InMemoryRepository := repository.NewInmemoryRepository()
 	TripService := service.NewTripService(InMemoryRepository)
+
+	// rabbit mq connection
+	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
+
+	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rabbitmq.Close()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
