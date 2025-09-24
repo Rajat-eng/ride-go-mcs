@@ -37,7 +37,7 @@ func (s *Service) RegisterDriver(driverId string, packageSlug string) (*pb.Drive
 	randomAvatar := util.GetRandomAvatar(randomIndex)
 
 	// we can ignore this property for now, but it must be sent to the frontend.
-	geohash := geohash.Encode(randomRoute[0][0], randomRoute[0][1])
+	geohash := geohash.Encode(randomRoute[0][0], randomRoute[0][1]) // first point of the route
 
 	driver := &pb.Driver{
 		Id:             driverId,

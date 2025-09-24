@@ -3,7 +3,6 @@ package main
 import "math/rand"
 
 // Predefined routes for drivers (used for the gRPC Streaming module)
-// (these are San Francisco routes, get these coordinates from Google Maps for example and build a custom route if you want)
 var PredefinedRoutes = [][][]float64{
 	{ // Route 1 - Around Marathahalli
 		{12.9550, 77.7010},
