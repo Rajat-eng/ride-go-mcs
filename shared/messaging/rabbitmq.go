@@ -129,10 +129,6 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 		return fmt.Errorf("failed to declare exchange: %s: %v", TripExchange, err)
 	}
 
-	// Declare and bind FindAvailableDriversQueue with relevant routing keys(topics) and TripExchange
-	// This queue will listen to TripEventCreated and TripEventDriverNotInterested events--> sent by trip-service when a trip is created
-	// and driver-service will consume messages from this queue
-
 	if err := r.DeclareAndBindQueue(
 		FindAvailableDriversQueue,
 		[]string{
@@ -169,6 +165,21 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 	if err := r.DeclareAndBindQueue(
 		NotifyDriverAssignQueue,
 		[]string{contracts.TripEventDriverAssigned},
+		TripExchange,
+	); err != nil {
+		return err
+	}
+	if err := r.DeclareAndBindQueue(
+		PaymentTripResponseQueue,
+		[]string{contracts.PaymentCmdCreateSession},
+		TripExchange,
+	); err != nil {
+		return err
+	}
+
+	if err := r.DeclareAndBindQueue(
+		NotifyPaymentSessionCreatedQueue,
+		[]string{contracts.PaymentEventSessionCreated},
 		TripExchange,
 	); err != nil {
 		return err

@@ -38,12 +38,12 @@ spec:
                   name: app-config
                   key: STRIPE_CANCEL_URL
 
-            # Stripe credentials
-            # - name: STRIPE_SECRET_KEY
-            #   valueFrom:
-            #     secretKeyRef:
-            #       name: stripe-secrets
-            #       key: stripe-secret-key
+            # stripe credentials
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-secrets
+                  key: stripe-secret-key
 
             # RabbitMQ credentials
             - name: RABBITMQ_URI

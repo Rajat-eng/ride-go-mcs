@@ -39,10 +39,9 @@ type PaymentIntent struct {
 
 // PaymentConfig holds the configuration for the payment service
 type PaymentConfig struct {
-	StripeSecretKey      string `json:"stripeSecretKey"`
-	StripePublishableKey string `json:"stripePublishableKey"`
-	StripeWebhookSecret  string `json:"stripeWebhookSecret"`
-	Currency             string `json:"currency"`
-	SuccessURL           string `json:"successURL"`
-	CancelURL            string `json:"cancelURL"`
+	StripeSecretKey     string `json:"stripeSecretKey"`
+	StripeWebhookSecret string `json:"stripeWebhookSecret"`
+	Currency            string `json:"currency"`
+	SuccessURL          string `json:"successURL"`
+	CancelURL           string `json:"cancelURL"`
 }

@@ -106,13 +106,33 @@ func (c *driverConsumer) handleTripAccepted(ctx context.Context, tripID string, 
 	if err != nil {
 		return err
 	}
-	// Notify the rider that a driver has been assigned
+	// Notify the rider that a driver has been assigned --. send to rider using ws
 	if err := c.rabbitmq.PublishMessage(ctx, contracts.TripEventDriverAssigned, contracts.AmqpMessage{
 		OwnerID: trip.UserID,
 		Data:    marshalledTrip,
 	}); err != nil {
 		return err
 	}
-	// TODO: Notify the payment service to start a payment link
+	//Notify the payment service to start a payment link for this trip
+	marshalledPayload, err := json.Marshal(messaging.PaymentTripResponseData{
+		TripID:   tripID,
+		UserID:   trip.UserID,
+		DriverID: driver.Id,
+		Amount:   trip.RideFare.TotalPriceInCents,
+		Currency: "USD",
+	})
+
+	if err != nil {
+		return err
+	}
+
+	if err := c.rabbitmq.PublishMessage(ctx, contracts.PaymentCmdCreateSession,
+		contracts.AmqpMessage{
+			OwnerID: trip.UserID,
+			Data:    marshalledPayload,
+		},
+	); err != nil {
+		return err
+	}
 	return nil
 }

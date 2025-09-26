@@ -19,11 +19,13 @@ type TripService struct {
 	repo domain.TripRepository
 }
 
+//
+
 func NewTripService(repo domain.TripRepository) *TripService {
 	return &TripService{repo: repo}
 }
 
-// Implement service methods here
+// Implement service methods here bcoz NewTripSerice return tripservice --> it should implement all methods of tripService defined in domain
 
 func (s *TripService) CreateTrip(ctx context.Context, fare *domain.RideFareModel) (*domain.TripModel, error) {
 	t := &domain.TripModel{
