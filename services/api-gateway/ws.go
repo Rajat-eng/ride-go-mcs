@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"log"
 	"net/http"
 	"ride-sharing/services/api-gateway/grpc_clients"
@@ -13,7 +14,7 @@ var (
 	connManager = messaging.NewConnectionManager()
 )
 
-func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rabbitMQ *messaging.RabbitMQ) {
+func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ) {
 	conn, err := connManager.Upgrade(w, r)
 	if err != nil {
 		log.Printf("WebSocket upgrade failed: %v", err)
@@ -31,6 +32,19 @@ func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rabbitMQ *mes
 	connManager.Add(userID, conn)
 	defer connManager.Remove(userID)
 
+	// Initialize queue consumers
+	queues := []string{
+		messaging.NotifyDriverNoDriversFoundQueue,
+		messaging.NotifyDriverAssignQueue,
+	}
+
+	for _, q := range queues {
+		consumer := messaging.NewQueueConsumer(rb, connManager, q)
+
+		if err := consumer.Start(); err != nil {
+			log.Printf("Failed to start consumer for queue: %s: err: %v", q, err)
+		}
+	}
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
@@ -120,7 +134,33 @@ func handleDriversWebSocket(w http.ResponseWriter, r *http.Request, rb *messagin
 			log.Printf("Error reading message: %v", err)
 			break
 		}
+		// recieving msg from Browser
+		type driverMessage struct {
+			Type string          `json:"type"`
+			Data json.RawMessage `json:"data"`
+		}
 
+		var driverMsg driverMessage
+		if err := json.Unmarshal(message, &driverMsg); err != nil {
+			log.Printf("Error unmarshaling driver message: %v", err)
+			continue
+		} // converting byte message from ws to go struct driverMessage
+
+		switch driverMsg.Type {
+		case contracts.DriverCmdLocation:
+			// Handle driver location update in the future
+			continue
+		case contracts.DriverCmdTripAccept, contracts.DriverCmdTripDecline:
+			// Forward the message to RabbitMQ
+			if err := rb.PublishMessage(ctx, driverMsg.Type, contracts.AmqpMessage{
+				OwnerID: userID,
+				Data:    driverMsg.Data,
+			}); err != nil {
+				log.Printf("Error publishing message to RabbitMQ: %v", err)
+			}
+		default:
+			log.Printf("Unknown message type: %s", driverMsg.Type)
+		}
 		log.Printf("Received message: %s", message)
 	}
 }

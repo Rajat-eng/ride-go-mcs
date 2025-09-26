@@ -67,6 +67,13 @@ func main() {
 	grpcServer := grpcserver.NewServer()
 	grpc.NewGRPCHandler(grpcServer, TripService, publisher) // register grpc handler with grpc server and trip service
 
+	// driver consumer
+	driverConsumer := events.NewDriverConsumer(rabbitmq, TripService)
+	go func() {
+		if err := driverConsumer.Listen(); err != nil {
+			log.Fatalf("Failed to listen to the driver consumer message: %v", err)
+		}
+	}()
 	httpServer := &http.Server{
 		Addr:    HttpAddr,
 		Handler: mux,
