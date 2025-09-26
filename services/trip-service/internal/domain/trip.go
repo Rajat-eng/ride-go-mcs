@@ -3,26 +3,29 @@ package domain
 import (
 	"context"
 	tripTypes "ride-sharing/services/trip-service/pkg/types"
+	pb "ride-sharing/shared/proto/trip"
 	"ride-sharing/shared/types"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
 type TripModel struct {
-	ID       primitive.ObjectID `bson:"_id,omitempty"`
-	UserID   string             // user who created the trip
-	From     string
-	To       string
+	ID       primitive.ObjectID
+	UserID   string
 	Status   string
 	RideFare *RideFareModel
-	Driver   *TripDriver //*pb.TripDriver
+	Driver   *pb.TripDriver // * pointer to TripDriver struct
 }
 
-type TripDriver struct {
-	id             string
-	name           string
-	profilePicture string
-	carPlate       string
+func (t *TripModel) ToProto() *pb.Trip {
+	return &pb.Trip{
+		Id:           t.ID.Hex(),
+		UserID:       t.UserID,
+		SelectedFare: t.RideFare.ToProto(),
+		Status:       t.Status,
+		Driver:       t.Driver,
+		Route:        t.RideFare.Route.ToProto(),
+	}
 }
 
 type TripRepository interface {

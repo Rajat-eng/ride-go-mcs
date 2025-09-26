@@ -45,7 +45,7 @@ docker_build_with_restart(
 
 k8s_yaml('./infra/development/k8s/api-gateway-deployment.yaml')
 k8s_resource('api-gateway', port_forwards=8081,
-             resource_deps=['api-gateway-compile'], labels="services")
+             resource_deps=['api-gateway-compile','rabbitmq'], labels="services")
 ### End of API Gateway ###
 ### Trip Service ###
 
@@ -75,12 +75,12 @@ docker_build_with_restart(
   ],
 )
 k8s_yaml('./infra/development/k8s/trip-service-deployment.yaml')
-k8s_resource('trip-service', resource_deps=['trip-service-compile'], labels="services")
+k8s_resource('trip-service', resource_deps=['trip-service-compile','rabbitmq'], labels="services")
 
 ## end of trip service ##
 
 ### Driver Service ###
-driver_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/driver-service ./services/driver-service/main.go'
+driver_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/driver-service ./services/driver-service'
 if os.name == 'nt':
  driver_compile_cmd = './infra/development/docker/driver-build.bat'
 
@@ -105,7 +105,7 @@ docker_build_with_restart(
 )
 
 k8s_yaml('./infra/development/k8s/driver-service-deployment.yaml')
-k8s_resource('driver-service', resource_deps=['driver-service-compile'], labels="services")
+k8s_resource('driver-service', resource_deps=['driver-service-compile','rabbitmq'], labels="services")
 
 ### End of Driver Service ###
 

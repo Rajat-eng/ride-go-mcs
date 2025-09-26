@@ -27,7 +27,6 @@ func main() {
 	defer rabbitmq.Close()
 
 	log.Println("Starting RabbitMQ connection")
-	svc := NewService()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -45,7 +44,7 @@ func main() {
 	}
 
 	serverErrors := make(chan error, 1)
-
+	svc := NewService()
 	grpcServer := grpcserver.NewServer()
 	NewGrpcHandler(grpcServer, svc)
 
@@ -53,6 +52,13 @@ func main() {
 		log.Printf("Starting gRPC server Trip service on port %s", lis.Addr().String())
 		if err := grpcServer.Serve(lis); err != nil {
 			serverErrors <- err
+		}
+	}()
+
+	consumer := NewTripConsumer(rabbitmq, svc)
+	go func() {
+		if err := consumer.Listen(); err != nil {
+			log.Fatalf("Failed to listen to the message: %v", err)
 		}
 	}()
 

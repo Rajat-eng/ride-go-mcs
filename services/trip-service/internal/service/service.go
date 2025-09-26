@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"ride-sharing/services/trip-service/internal/domain"
 	tripTypes "ride-sharing/services/trip-service/pkg/types"
+	pb "ride-sharing/shared/proto/trip"
 	"ride-sharing/shared/types"
 
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -27,11 +28,9 @@ func (s *TripService) CreateTrip(ctx context.Context, fare *domain.RideFareModel
 	t := &domain.TripModel{
 		ID:       primitive.NewObjectID(),
 		UserID:   fare.UserID,
-		From:     "",
-		To:       "",
 		RideFare: fare, // * gives value stored at address fare
 		Status:   "pending",
-		Driver:   &domain.TripDriver{},
+		Driver:   &pb.TripDriver{}, // & gives address of empty TripDriver struct
 	}
 	return s.repo.CreateTrip(ctx, t)
 }
@@ -141,19 +140,19 @@ func (s *TripService) GenerateTripFares(ctx context.Context, rideFares []*domain
 func getBaseFares() []*domain.RideFareModel {
 	return []*domain.RideFareModel{
 		{
-			PackageSlug:       "Bike",
+			PackageSlug:       "van",
 			TotalPriceInCents: 100,
 		},
 		{
-			PackageSlug:       "Auto",
+			PackageSlug:       "suv",
 			TotalPriceInCents: 150,
 		},
 		{
-			PackageSlug:       "Mini",
+			PackageSlug:       "sedan",
 			TotalPriceInCents: 250,
 		},
 		{
-			PackageSlug:       "Luxury",
+			PackageSlug:       "luxury",
 			TotalPriceInCents: 400,
 		},
 	}

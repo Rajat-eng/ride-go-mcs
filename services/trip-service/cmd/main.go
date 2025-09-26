@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"ride-sharing/services/trip-service/internal/infrastructure/events"
 	"ride-sharing/services/trip-service/internal/infrastructure/grpc"
 	"ride-sharing/services/trip-service/internal/infrastructure/repository"
 	"ride-sharing/services/trip-service/internal/service"
@@ -47,6 +48,8 @@ func main() {
 		cancel() // call to ctx.done
 	}()
 
+	publisher := events.NewTripEventPublisher(rabbitmq)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		// Health check endpoint
@@ -62,7 +65,7 @@ func main() {
 	serverErrors := make(chan error, 2)
 
 	grpcServer := grpcserver.NewServer()
-	grpc.NewGRPCHandler(grpcServer, TripService) // register grpc handler with grpc server and trip service
+	grpc.NewGRPCHandler(grpcServer, TripService, publisher) // register grpc handler with grpc server and trip service
 
 	httpServer := &http.Server{
 		Addr:    HttpAddr,
