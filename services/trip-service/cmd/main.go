@@ -74,6 +74,15 @@ func main() {
 			log.Fatalf("Failed to listen to the driver consumer message: %v", err)
 		}
 	}()
+
+	// Start payment consumer
+	paymentConsumer := events.NewPaymentConsumer(rabbitmq, TripService)
+	go func() {
+		if err := paymentConsumer.Listen(); err != nil {
+			log.Fatalf("Failed to listen to the payment consumer message: %v", err)
+		}
+	}()
+
 	httpServer := &http.Server{
 		Addr:    HttpAddr,
 		Handler: mux,
