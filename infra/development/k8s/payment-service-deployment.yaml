@@ -51,6 +51,12 @@ spec:
                 secretKeyRef:
                   name: rabbitmq-credentials
                   key: uri
+            # Jeagar credentials
+            - name: JAEGER_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  key: JAEGER_ENDPOINT
+                  name: app-config
 ---
 apiVersion: v1
 kind: Service

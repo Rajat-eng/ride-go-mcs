@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"ride-sharing/shared/env"
 	"ride-sharing/shared/messaging"
+	"ride-sharing/shared/tracing"
 	"syscall"
 
 	grpcserver "google.golang.org/grpc"
@@ -18,17 +19,30 @@ const (
 )
 
 func main() {
-	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
 
+	ctx, cancel := context.WithCancel(context.Background())
+
+	tracerCfg := tracing.Config{
+		ServiceName:    "driver-service",
+		Environment:    env.GetString("ENVIRONMENT", "development"),
+		JaegerEndpoint: env.GetString("JAEGER_ENDPOINT", "http://jaeger:14268/api/traces"),
+	}
+
+	sh, err := tracing.InitTracer(tracerCfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize the tracer: %v", err)
+	}
+
+	defer cancel()
+	defer sh(ctx)
+
+	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
 	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer rabbitmq.Close()
-
 	log.Println("Starting RabbitMQ connection")
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	defer rabbitmq.Close()
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)

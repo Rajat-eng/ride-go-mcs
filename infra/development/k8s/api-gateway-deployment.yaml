@@ -41,6 +41,11 @@ spec:
                 secretKeyRef:
                   name: stripe-secrets
                   key: stripe-webhook-key
+            - name: JAEGER_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  key: JAEGER_ENDPOINT
+                  name: app-config
 ---
 apiVersion: v1
 kind: Service

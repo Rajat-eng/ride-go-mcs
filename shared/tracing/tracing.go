@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -19,7 +20,10 @@ type Config struct {
 
 func InitTracer(cfg Config) (func(context.Context) error, error) {
 	// Exporter
-	traceExporter := nil
+	traceExporter, err := NewExporter(cfg.JaegerEndpoint)
+	if err != nil {
+		return nil, err
+	}
 
 	// Trace Provider
 	traceProvider, err := newTraceProvider(cfg, traceExporter) // manages spans/trace and sends to exporter
@@ -36,10 +40,14 @@ func InitTracer(cfg Config) (func(context.Context) error, error) {
 	return traceProvider.Shutdown, nil
 }
 
+func NewExporter(endpoint string) (sdktrace.SpanExporter, error) {
+	return jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(endpoint)))
+}
+
 func newPropagator() propagation.TextMapPropagator {
 	return propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{},
-		propagation.Baggage{},
+		propagation.TraceContext{}, // for spanid
+		propagation.Baggage{},      // used defined key value pairs
 	)
 }
 
@@ -50,12 +58,14 @@ func newTraceProvider(cfg Config, exporter sdktrace.SpanExporter) (*sdktrace.Tra
 			semconv.DeploymentEnvironmentKey.String(cfg.Environment),
 		),
 	)
+	// no use of stdout bcoz it will simply throw logs . we want spans to move to exporter with service name and deployed env
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
 	}
 
+	// get trace provder with resource and exporter
 	traceProvider := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exporter),
+		sdktrace.WithBatcher(exporter), // send batch every 5sec (default)
 		sdktrace.WithResource(res),
 	)
 
