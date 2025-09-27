@@ -101,7 +101,7 @@ func (c *driverConsumer) handleTripAccepted(ctx context.Context, tripID string, 
 	if err != nil {
 		return err
 	}
-	// 3. Driver has been assigned -> publish this event to RB
+	// 3. Driver has been assigned -> publish this event to rider
 	marshalledTrip, err := json.Marshal(trip)
 	if err != nil {
 		return err
@@ -113,7 +113,7 @@ func (c *driverConsumer) handleTripAccepted(ctx context.Context, tripID string, 
 	}); err != nil {
 		return err
 	}
-	//Notify the payment service to start a payment link for this trip
+	//Notify the payment service to start a payment session for this trip
 	marshalledPayload, err := json.Marshal(messaging.PaymentTripResponseData{
 		TripID:   tripID,
 		UserID:   trip.UserID,

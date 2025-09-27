@@ -39,7 +39,7 @@ func (c *TripConsumer) Listen() error {
 		}
 
 		switch msg.RoutingKey {
-		// reading payment create session when driver accepts the trip
+		// reading payment create session when driver is assigned for the trip and creating sessionId for the payment
 		case contracts.PaymentCmdCreateSession:
 			if err := c.handleTripAccepted(ctx, payload); err != nil {
 				log.Printf("Failed to handle trip accepted: %v", err)
@@ -73,7 +73,7 @@ func (c *TripConsumer) handleTripAccepted(ctx context.Context, payload messaging
 	paymentPayload := messaging.PaymentEventSessionCreatedData{
 		TripID:    payload.TripID,
 		SessionID: paymentSession.StripeSessionID,
-		Amount:    float64(paymentSession.Amount) / 100.0, // Convert from cents to dollars
+		Amount:    float64(paymentSession.Amount), // Convert from cents to dollars
 		Currency:  paymentSession.Currency,
 	}
 

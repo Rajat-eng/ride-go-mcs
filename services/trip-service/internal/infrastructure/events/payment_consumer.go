@@ -31,6 +31,11 @@ func (c *paymentConsumer) Listen() error {
 			log.Printf("Failed to unmarshal message: %v", err)
 			return err
 		}
+		// This code snippet is attempting to unmarshal the `Data` field of an `AmqpMessage` struct into a
+		// variable named `payload` of type `messaging.PaymentStatusUpdateData`. The `json.Unmarshal`
+		// function is used to decode the JSON data from the `message.Data` field into the `payload`
+		// variable. If there is an error during the unmarshaling process, it logs the error and returns the
+		// error.
 		var payload messaging.PaymentStatusUpdateData
 		if err := json.Unmarshal(message.Data, &payload); err != nil {
 			log.Printf("Failed to unmarshal payload: %v", err)

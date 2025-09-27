@@ -169,6 +169,8 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 	); err != nil {
 		return err
 	}
+
+	// driver assigned --> update trip and send event to payment service to create payment session
 	if err := r.DeclareAndBindQueue(
 		PaymentTripResponseQueue,
 		[]string{contracts.PaymentCmdCreateSession},
@@ -177,6 +179,7 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 		return err
 	}
 
+	// create payment session--> pay using stripe on pay button and notify user
 	if err := r.DeclareAndBindQueue(
 		NotifyPaymentSessionCreatedQueue,
 		[]string{contracts.PaymentEventSessionCreated},
