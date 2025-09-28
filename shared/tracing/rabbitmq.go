@@ -102,6 +102,8 @@ func TracedConsumer(delivery amqp.Delivery, handler func(context.Context, amqp.D
 		span.SetStatus(codes.Error, err.Error())
 		span.AddEvent("message.nack",
 			trace.WithAttributes(
+				// The code snippet `cfg := retry.DefaultConfig()` initializes a default configuration for retrying
+				// operations. It sets up parameters like initial delay, maximum retries, and backoff strategy.
 				attribute.String("error", err.Error()),
 				attribute.Bool("requeue", false),
 			),
