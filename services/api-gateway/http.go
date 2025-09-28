@@ -8,6 +8,7 @@ import (
 	"ride-sharing/services/api-gateway/grpc_clients"
 
 	"ride-sharing/shared/contracts"
+	"ride-sharing/shared/tracing"
 	"ride-sharing/shared/types"
 	"ride-sharing/shared/util"
 
@@ -20,7 +21,11 @@ import (
 	"github.com/go-playground/validator/v10"
 )
 
+var tracer = tracing.GetTracer("api-gateway")
+
 func HandleTripPreview(w http.ResponseWriter, r *http.Request) {
+	ctx, span := tracer.Start(r.Context(), "handleTripPreview")
+	defer span.End() // any db or other operation
 	var reqBody PreviewTripRequest
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -51,7 +56,7 @@ func HandleTripPreview(w http.ResponseWriter, r *http.Request) {
 	// all requests will fail
 	defer tripService.Close()
 
-	tripPreview, err := tripService.Client.PreviewTrip(r.Context(), reqBody.toProto())
+	tripPreview, err := tripService.Client.PreviewTrip(ctx, reqBody.toProto())
 	// tripPreviwew is pb.PreviewTripResponse
 	// it gives pb response
 	// need to convert to json response
@@ -65,6 +70,8 @@ func HandleTripPreview(w http.ResponseWriter, r *http.Request) {
 }
 
 func HandleStartTrip(w http.ResponseWriter, r *http.Request) {
+	ctx, span := tracer.Start(r.Context(), "handleTripStart")
+	defer span.End()
 	var reqBody StartTripRequest
 	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
@@ -85,7 +92,7 @@ func HandleStartTrip(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	trip, err := tripService.Client.CreateTrip(r.Context(), reqBody.toProto())
+	trip, err := tripService.Client.CreateTrip(ctx, reqBody.toProto())
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -94,6 +101,8 @@ func HandleStartTrip(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleStripeWebhook(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ) {
+	ctx, span := tracer.Start(r.Context(), "handleStripeWebhook")
+	defer span.End()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
@@ -153,7 +162,7 @@ func handleStripeWebhook(w http.ResponseWriter, r *http.Request, rb *messaging.R
 		}
 
 		if err := rb.PublishMessage(
-			r.Context(),
+			ctx,
 			contracts.PaymentEventSuccess,
 			message,
 		); err != nil {

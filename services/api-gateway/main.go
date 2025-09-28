@@ -55,20 +55,23 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 
+	// tracing middleware adds extra headers, automatatic tracing , methods
+	// tracer.start becomes child span(cusotm span) for this middlware
+
 	// Route for trip preview
-	mux.HandleFunc("POST /trip/preview", enableCORS(HandleTripPreview))
-	mux.HandleFunc("POST /trip/start", enableCORS(HandleStartTrip))
+	mux.Handle("POST /trip/preview", tracing.WrapHandlerFunc(enableCORS(HandleTripPreview), "/trip/preview"))
+	// mux.HandleFunc("POST /trip/start", enableCORS(HandleStartTrip))
+	mux.Handle("POST /trip/start", tracing.WrapHandlerFunc(enableCORS(HandleStartTrip), "/trip/start"))
 
-	mux.HandleFunc("/ws/drivers", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/ws/drivers", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleDriversWebSocket(w, r, rabbitmq)
-	})
-	mux.HandleFunc("/ws/riders", func(w http.ResponseWriter, r *http.Request) {
+	}, "/ws/drivers"))
+	mux.Handle("/ws/riders", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleRidersWebSocket(w, r, rabbitmq)
-	})
-
-	mux.HandleFunc("/webhook/stripe", func(w http.ResponseWriter, r *http.Request) {
+	}, "/ws/riders"))
+	mux.Handle("/webhook/stripe", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleStripeWebhook(w, r, rabbitmq)
-	})
+	}, "/webhook/stripe"))
 
 	server := &http.Server{
 		Addr:    httpAddr,

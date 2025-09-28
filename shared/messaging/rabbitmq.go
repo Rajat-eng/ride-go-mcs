@@ -96,8 +96,9 @@ func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) err
 			if err := handler(ctx, msg); err != nil {
 				log.Fatalf("failed to handle the message: %v", err)
 				// not requeuing the message to avoid potential infinite loops
-
-				if nackErr := msg.Nack(false, true); nackErr != nil {
+				// false(1)--> apply nack to this message only.  no batch processing
+				// false(2)--> dont requeue in same channel
+				if nackErr := msg.Nack(false, false); nackErr != nil {
 					log.Printf("Failed to nack message: %v", nackErr)
 				}
 				continue

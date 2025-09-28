@@ -25,7 +25,7 @@ func (qc *QueueConsumer) Start() error {
 	msgs, err := qc.rb.Channel.Consume(
 		qc.queueName,
 		"",
-		true,
+		true, // auto -ack
 		false,
 		false,
 		false,

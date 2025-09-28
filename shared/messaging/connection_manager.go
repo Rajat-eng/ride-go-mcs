@@ -19,13 +19,15 @@ var (
 // This is necessary because the websocket connection is not thread-safe
 type connWrapper struct {
 	conn  *websocket.Conn
-	mutex sync.Mutex
+	mutex sync.Mutex // If multiple goroutines try to write a message to the same conn, the lock ensures only one goroutine does it at a time.
 }
 
 type ConnectionManager struct {
 	connections map[string]*connWrapper // Local connections storage (userId -> connection)
 	mutex       sync.RWMutex
 }
+
+// If multiple goroutines try to write a message to the same conn, the lock ensures only one goroutine does it at a time.
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {

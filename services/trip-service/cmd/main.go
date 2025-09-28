@@ -77,7 +77,7 @@ func main() {
 
 	serverErrors := make(chan error, 2)
 
-	grpcServer := grpcserver.NewServer()
+	grpcServer := grpcserver.NewServer(tracing.WithTracingInterceptors()...)
 	grpc.NewGRPCHandler(grpcServer, TripService, publisher) // register grpc handler with grpc server and trip service
 
 	// driver consumer

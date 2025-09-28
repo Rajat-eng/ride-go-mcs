@@ -59,7 +59,8 @@ func main() {
 
 	serverErrors := make(chan error, 1)
 	svc := NewService()
-	grpcServer := grpcserver.NewServer()
+	// Starting the gRPC server with otel tacing hooks enabled
+	grpcServer := grpcserver.NewServer(tracing.WithTracingInterceptors()...)
 	NewGrpcHandler(grpcServer, svc)
 
 	go func() {

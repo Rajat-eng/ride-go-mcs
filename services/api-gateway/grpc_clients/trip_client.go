@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 	pb "ride-sharing/shared/proto/trip"
+	"ride-sharing/shared/tracing"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -19,7 +20,14 @@ func NewTripServiceClient() (*TripServiceClient, error) {
 	if tripServiceURL == "" {
 		tripServiceURL = "trip-service:9093"
 	}
-	conn, err := grpc.NewClient(tripServiceURL, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// initiaing grpc client with tacing options
+	dialOptions := append(
+		tracing.DialOptionsWithTracing(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+
+	conn, err := grpc.NewClient(tripServiceURL, dialOptions...)
+
 	// conn is connection object to trip  via grpc
 	if err != nil {
 		log.Println("failed to connect to trip service:", err)
