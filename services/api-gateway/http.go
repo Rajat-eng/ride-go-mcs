@@ -43,7 +43,7 @@ func HandleTripPreview(w http.ResponseWriter, r *http.Request) {
 		util.RespondWithError(w, http.StatusBadRequest, "Validation failed", errors)
 		return
 	}
-	tripService, err := grpc_clients.NewTripServiceClient()
+	tripService, err := grpc_clients.NewTripServiceClient() // get our trip server fro rpc calls
 	if err != nil {
 		log.Fatal(err)
 	}

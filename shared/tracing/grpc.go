@@ -7,12 +7,15 @@ import (
 	"google.golang.org/grpc/stats"
 )
 
+// it sets vaious options for grpc server to initialize--> currently tracing options
 func WithTracingInterceptors() []grpc.ServerOption {
 	return []grpc.ServerOption{
 		grpc.StatsHandler(newServerHandler()),
 	}
 }
 
+// for grpx client initilaize it with various dial options to set up connections with server
+// currnelt with tracing options and collect data in otel
 func DialOptionsWithTracing() []grpc.DialOption {
 	return []grpc.DialOption{
 		grpc.WithStatsHandler(newClientHandler()),

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"ride-sharing/shared/contracts"
+	"ride-sharing/shared/tracing"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -50,16 +51,23 @@ func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, messag
 	if err != nil {
 		return err
 	}
+	msg := amqp.Publishing{
+		ContentType:  "text/plain",
+		Body:         jsonMsg,
+		DeliveryMode: amqp.Persistent,
+	}
+	return tracing.TracedPublisher(ctx, TripExchange, routingKey, msg, r.publish)
+
+}
+
+func (r *RabbitMQ) publish(ctx context.Context, exchange, routingKey string, msg amqp.Publishing) error {
 	return r.Channel.PublishWithContext(ctx,
 		TripExchange, // exchange
 		routingKey,   // routing key
 		false,        // mandatory
-		false,        // immediate
-		amqp.Publishing{
-			ContentType:  "text/plain",
-			Body:         jsonMsg,
-			DeliveryMode: amqp.Persistent,
-		})
+		false,
+		msg,
+	)
 }
 
 type MessageHandler func(context.Context, amqp.Delivery) error
@@ -89,22 +97,20 @@ func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) err
 		return err
 	}
 
-	ctx := context.Background() // means we are not using any timeout or cancellation for now
-
 	go func() {
 		for msg := range msgs {
-			if err := handler(ctx, msg); err != nil {
-				log.Fatalf("failed to handle the message: %v", err)
-				// not requeuing the message to avoid potential infinite loops
-				// false(1)--> apply nack to this message only.  no batch processing
-				// false(2)--> dont requeue in same channel
+
+			if err := tracing.TracedConsumer(msg, handler); err != nil {
+				log.Printf("failed to handle the message: %v", err)
+
+				// Nack without requeue to avoid loops
 				if nackErr := msg.Nack(false, false); nackErr != nil {
 					log.Printf("Failed to nack message: %v", nackErr)
 				}
 				continue
 			}
 
-			// Acknowledge the message to remove it from the queue
+			// Ack on success
 			if ackErr := msg.Ack(false); ackErr != nil {
 				log.Printf("ERROR: Failed to Ack message: %v. Message body: %s", ackErr, msg.Body)
 			}
