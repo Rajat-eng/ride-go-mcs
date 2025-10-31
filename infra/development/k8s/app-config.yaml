@@ -8,3 +8,4 @@ data:
   JAEGER_ENDPOINT: "http://jaeger:14268/api/traces"
   STRIPE_SUCCESS_URL: "http://localhost:3000?payment=success"
   STRIPE_CANCEL_URL: "http://localhost:3000?payment=cancel"
+  

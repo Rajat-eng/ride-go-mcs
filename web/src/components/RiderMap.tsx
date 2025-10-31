@@ -52,8 +52,6 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
         resetTripStatus
     } = useRiderStreamConnection(location, userID);
 
-    console.log(tripStatus)
-
     const handleMapClick = async (e: L.LeafletMouseEvent) => {
         if (trip?.tripID) {
             return

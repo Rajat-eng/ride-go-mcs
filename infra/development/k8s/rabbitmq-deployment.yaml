@@ -19,14 +19,14 @@ spec:
           ports:
             - containerPort: 5672 # AMQP port
             - containerPort: 15672 # Management UI port
-          readinessProbe:
+          readinessProbe: #recireve traf 
             exec:
               command: ["rabbitmq-diagnostics", "ping"]
             initialDelaySeconds: 60
             periodSeconds: 10
             timeoutSeconds: 30
             failureThreshold: 5
-          livenessProbe:
+          livenessProbe: # restasrts the pod if RabbitMQ is not running
             exec:
               command: ["rabbitmq-diagnostics", "check_running"]
             initialDelaySeconds: 120
@@ -56,7 +56,7 @@ spec:
           volumeMounts:
             - name: rabbitmq-data
               mountPath: /var/lib/rabbitmq
-  volumeClaimTemplates:
+  volumeClaimTemplates: # claim bind to this pod for data persistence for each replica
     - metadata:
         name: rabbitmq-data
       spec:

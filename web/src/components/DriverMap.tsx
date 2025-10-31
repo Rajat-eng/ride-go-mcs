@@ -68,6 +68,8 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
   }
 
   const handleAcceptTrip = () => {
+    console.log("requestedTrip",requestedTrip)
+    console.log("driver",driver)
     if (!requestedTrip || !requestedTrip.id || !driver) {
       alert("No trip ID found or driver is not set")
       return

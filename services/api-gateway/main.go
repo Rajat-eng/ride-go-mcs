@@ -12,11 +12,14 @@ import (
 	"ride-sharing/shared/env"
 	"ride-sharing/shared/messaging"
 	"ride-sharing/shared/tracing"
+
+	"github.com/redis/go-redis/v9"
 )
 
 var (
 	httpAddr    = env.GetString("HTTP_ADDR", ":8081")
 	rabbitMqURI = env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")
+	redisUri    = env.GetString("REDIS_URI", "redis:6379")
 )
 
 func main() {
@@ -36,7 +39,7 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	defer sh(ctx)
+	defer sh(ctx) // Ensure tracer is shutdown when main exits
 
 	// RabbitMQ connection
 	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
@@ -46,6 +49,20 @@ func main() {
 	defer rabbitmq.Close()
 
 	log.Println("Starting RabbitMQ connection")
+
+	// 🔗 Connect to Redis running in Kubernetes
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     redisUri,
+		Password: "",
+		DB:       0,
+	})
+
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		log.Fatalf("❌ Failed to connect to Redis: %v", err)
+	}
+	log.Println("✅ Connected to Redis")
+
+	connManager := messaging.NewRedisConnectionManager(rdb)
 
 	mux := http.NewServeMux() // create a new ServeMux for routing
 
@@ -64,10 +81,10 @@ func main() {
 	mux.Handle("POST /trip/start", tracing.WrapHandlerFunc(enableCORS(HandleStartTrip), "/trip/start"))
 
 	mux.Handle("/ws/drivers", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleDriversWebSocket(w, r, rabbitmq)
+		handleDriversWebSocket(w, r, rabbitmq, connManager)
 	}, "/ws/drivers"))
 	mux.Handle("/ws/riders", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleRidersWebSocket(w, r, rabbitmq)
+		handleRidersWebSocket(w, r, rabbitmq, connManager)
 	}, "/ws/riders"))
 	mux.Handle("/webhook/stripe", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleStripeWebhook(w, r, rabbitmq)

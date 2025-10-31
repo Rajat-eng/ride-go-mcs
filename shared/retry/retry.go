@@ -8,6 +8,8 @@ import (
 	"context"
 	"log"
 	"time"
+
+	"github.com/rabbitmq/amqp091-go"
 )
 
 type Config struct {
@@ -26,7 +28,7 @@ func DefaultConfig() Config {
 }
 
 // WithBackoff executes the given operation with exponential backoff retry logic
-func WithBackoff(ctx context.Context, cfg Config, operation func() error) error {
+func WithBackoff(ctx context.Context, cfg Config, operation func(context.Context, amqp091.Delivery) error, d amqp091.Delivery) error {
 	var err error
 	wait := cfg.InitialWait
 
@@ -47,7 +49,7 @@ func WithBackoff(ctx context.Context, cfg Config, operation func() error) error 
 			}
 		}
 
-		if err = operation(); err == nil {
+		if err = operation(ctx, d); err == nil {
 			return nil
 		}
 

@@ -78,6 +78,7 @@ func (cm *ConnectionManager) Get(id string) (*websocket.Conn, bool) {
 }
 
 func (cm *ConnectionManager) SendMessage(id string, message contracts.WSMessage) error {
+	log.Printf("Sending message to user %s: %+v", id, message)
 	cm.mutex.RLock()
 	wrapper, exists := cm.connections[id]
 	cm.mutex.RUnlock()

@@ -1,0 +1,25 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: dlq-worker
+spec:
+  # Run every 10 minutes
+  schedule: "*/10 * * * *"
+  successfulJobsHistoryLimit: 2 # keep last 2 successful jobs
+  failedJobsHistoryLimit: 2 # keep last 2 failed jobs
+  jobTemplate:
+    spec:
+      backoffLimit: 3  # retry failed job 3 times before giving up
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: dlq-worker
+              image: ride-sharing/dlq-worker:latest
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: RABBITMQ_URI
+                  valueFrom:
+                    secretKeyRef:
+                      name: rabbitmq-credentials
+                      key: uri

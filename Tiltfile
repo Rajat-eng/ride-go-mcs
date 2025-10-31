@@ -15,6 +15,10 @@ k8s_yaml('./infra/development/k8s/rabbitmq-deployment.yaml')
 k8s_resource('rabbitmq', port_forwards=['5672', '15672'], labels='tooling')
 ### End RabbitMQ ###
 
+### Redis ###
+k8s_yaml('./infra/development/k8s/redis-deployment.yaml')
+k8s_resource('redis', port_forwards=6379, labels='tooling')
+### End Redis ###
 
 ### API Gateway ###
 
@@ -108,6 +112,46 @@ k8s_yaml('./infra/development/k8s/driver-service-deployment.yaml')
 k8s_resource('driver-service', resource_deps=['driver-service-compile','rabbitmq'], labels="services")
 
 ### End of Driver Service ###
+
+
+
+### DLQ Worker ###
+
+dlq_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/dlq-worker ./services/dlq-worker'
+if os.name == 'nt':
+  dlq_compile_cmd = './infra/development/docker/dlq-build.bat'
+
+local_resource(
+  'dlq-worker-compile',
+  dlq_compile_cmd,
+  deps=['./services/dlq-worker', './shared'],
+  labels="compiles"
+)
+
+docker_build_with_restart(
+  'ride-sharing/dlq-worker',
+  '.',
+  entrypoint=['/app/build/dlq-worker'],
+  dockerfile='./infra/development/docker/dlq-worker.Dockerfile',
+  only=[
+    './build/dlq-worker',
+    './shared',
+  ],
+  live_update=[
+    sync('./build', '/app/build'),
+    sync('./shared', '/app/shared'),
+  ],
+)
+
+k8s_yaml('./infra/development/k8s/dlq-worker-deployment.yaml')
+k8s_resource(
+  'dlq-worker',
+  resource_deps=['dlq-worker-compile', 'rabbitmq'],
+  labels="jobs"
+)
+
+### End of DLQ Worker ###
+
 
 
 ### Web Frontend ###

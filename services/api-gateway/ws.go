@@ -10,11 +10,7 @@ import (
 	driver "ride-sharing/shared/proto/driver"
 )
 
-var (
-	connManager = messaging.NewConnectionManager()
-)
-
-func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ) {
+func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ, connManager *messaging.RedisConnectionManager) {
 	conn, err := connManager.Upgrade(w, r)
 	if err != nil {
 		log.Printf("WebSocket upgrade failed: %v", err)
@@ -57,7 +53,7 @@ func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging
 	}
 }
 
-func handleDriversWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ) {
+func handleDriversWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ, connManager *messaging.RedisConnectionManager) {
 	conn, err := connManager.Upgrade(w, r)
 	if err != nil {
 		log.Printf("WebSocket upgrade failed: %v", err)
@@ -66,7 +62,7 @@ func handleDriversWebSocket(w http.ResponseWriter, r *http.Request, rb *messagin
 
 	defer conn.Close()
 
-	userID := r.URL.Query().Get("userID")
+	userID := r.URL.Query().Get("userID") // driver user ID
 	if userID == "" {
 		log.Println("No user ID provided")
 		return
