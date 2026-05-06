@@ -5,19 +5,18 @@ import { useRiderStreamConnection } from '../hooks/useRiderStreamConnection';
 import { MapContainer, Marker, Popup, Rectangle, TileLayer } from 'react-leaflet'
 import L from 'leaflet';
 import { getGeohashBounds } from '../utils/geohash';
-import { useMemo, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { MapClickHandler } from './MapClickHandler';
-import { Button } from './ui/button';
-import { RouteFare, RequestRideProps, TripPreview, HTTPTripStartResponse } from "../types";
 import { RoutingControl } from "./RoutingControl";
-import { API_URL } from '../constants';
 import { RiderTripOverview } from './RiderTripOverview';
-import { BackendEndpoints, HTTPTripPreviewRequestPayload, HTTPTripPreviewResponse, HTTPTripStartRequestPayload } from '../contracts';
+import { useAppSelector } from '../store/store';
+import { useRiderTrip } from '../hooks/useRiderTrip';
+import { UserInfo } from './UserInfo';
 
 const userMarker = new L.Icon({
     iconUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ed/Map_pin_icon.svg/176px-Map_pin_icon.svg.png",
-    iconSize: [40, 40], // Size of the marker
-    iconAnchor: [20, 40], // Anchor point
+    iconSize: [40, 40],
+    iconAnchor: [20, 40],
 });
 
 const driverMarker = new L.Icon({
@@ -31,122 +30,22 @@ interface RiderMapProps {
 }
 
 export default function RiderMap({ onRouteSelected }: RiderMapProps) {
-    const [trip, setTrip] = useState<TripPreview | null>(null)
-    const [selectedCarPackage] = useState<RouteFare | null>(null)
-    const [destination, setDestination] = useState<[number, number] | null>(null)
-    const mapRef = useRef<L.Map>(null)
-    const userID = useMemo(() => crypto.randomUUID(), [])
-    const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const mapRef = useRef<L.Map>(null);
+    const userID = useAppSelector((s) => s.auth.user?.id) ?? '';
 
     const location = {
         latitude: 12.920422,
         longitude: 77.611008,
     };
 
-    const {
-        drivers,
-        error,
-        tripStatus,
-        assignedDriver,
-        paymentSession,
-        resetTripStatus
-    } = useRiderStreamConnection(location, userID);
+    useRiderStreamConnection(location, userID);
 
-    const handleMapClick = async (e: L.LeafletMouseEvent) => {
-        if (trip?.tripID) {
-            return
-        }
+    const { drivers, error, tripStatus, assignedDriver, paymentSession } = useAppSelector((s) => s.rider);
+    const { trip, destination, handleMapClick, handleStartTrip, handleCancelTrip } = useRiderTrip(userID);
 
-        if (debounceTimeoutRef.current) {
-            clearTimeout(debounceTimeoutRef.current);
-        }
-
-        debounceTimeoutRef.current = setTimeout(async () => {
-            setDestination([e.latlng.lat, e.latlng.lng])
-
-            const data = await requestRidePreview({
-                pickup: [location.latitude, location.longitude],
-                destination: [e.latlng.lat, e.latlng.lng],
-            })
-            console.log(data)
-
-            if(data["route"]==null){
-                alert("No route found. Please select a different destination.");
-                setDestination(null);
-                return;
-            }
-
-            const parsedRoute = data.route.geometry[0].coordinates
-                .map((coord) => [coord.longitude, coord.latitude] as [number, number])
-
-            setTrip({
-                tripID: "",
-                route: parsedRoute,
-                rideFares: data.rideFares,
-                distance: data.route.distance,
-                duration: data.route.duration,
-            })
-
-            // Call onRouteSelected with the route distance
-            onRouteSelected?.(data.route.distance)
-        }, 500);
-    }
-
-    const requestRidePreview = async (props: RequestRideProps): Promise<HTTPTripPreviewResponse> => {
-        const { pickup, destination } = props
-        const payload = {
-            userID: userID,
-            pickup: {
-                latitude: pickup[0],
-                longitude: pickup[1],
-            },
-            destination: {
-                latitude: destination[0],
-                longitude: destination[1],
-            },
-        } as HTTPTripPreviewRequestPayload
-
-        const response = await fetch(`${API_URL}${BackendEndpoints.PREVIEW_TRIP}`, {
-            method: 'POST',
-            body: JSON.stringify(payload),
-        })
-        const { data } = await response.json() as { data: HTTPTripPreviewResponse }
-        return data
-    }
-
-    const handleStartTrip = async (fare: RouteFare) => {
-        const payload = {
-            rideFareID: fare.id,
-            userID: userID,
-        } as HTTPTripStartRequestPayload
-
-        if (!fare.id) {
-            alert("No Fare ID in the payload")
-            return
-        }
-
-        const response = await fetch(`${API_URL}${BackendEndpoints.START_TRIP}`, {
-            method: 'POST',
-            body: JSON.stringify(payload),
-        })
-        const data = await response.json() as HTTPTripStartResponse
-
-        if (response.ok && trip) {
-            setTrip((prev) => ({
-                ...prev,
-                tripID: data.tripID,
-            } as TripPreview))
-
-        }
-
-        return data
-    }
-
-    const handleCancelTrip = () => {
-        setTrip(null)
-        setDestination(null)
-        resetTripStatus()
-    }
+    const onMapClick = async (e: L.LeafletMouseEvent) => {
+        await handleMapClick(e.latlng, location, onRouteSelected);
+    };
 
     if (error) {
         return <div>Error: {error}</div>
@@ -154,6 +53,7 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
 
     return (
         <div className="relative flex flex-col md:flex-row h-screen">
+            <UserInfo />
             <div className={`${destination ? 'flex-[0.7]' : 'flex-1'}`}>
                 <MapContainer
                     center={[location.latitude, location.longitude]}
@@ -167,7 +67,6 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
                     />
                     <Marker position={[location.latitude, location.longitude]} icon={userMarker} />
 
-                    {/* Render geohash grid cells */}
                     {drivers?.map((driver) => (
                         <Rectangle
                             key={`grid-${driver?.geohash}`}
@@ -182,7 +81,6 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
                         </Rectangle>
                     ))}
 
-                    {/* Render driver markers */}
                     {drivers?.map((driver) => (
                         <Marker
                             key={driver?.id}
@@ -213,17 +111,10 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
                         </Marker>
                     )}
 
-                    {selectedCarPackage && (
-                        <div className="mt-4 z-[9999] absolute bottom-0 right-0">
-                            <Button className="w-full">
-                                Request Ride with {selectedCarPackage.packageSlug}
-                            </Button>
-                        </div>
-                    )}
                     {trip && (
                         <RoutingControl route={trip.route} />
                     )}
-                    <MapClickHandler onClick={handleMapClick} />
+                    <MapClickHandler onClick={onMapClick} />
                 </MapContainer>
             </div>
 

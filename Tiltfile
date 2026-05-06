@@ -1,11 +1,9 @@
-# Load the restart_process extension
 load('ext://restart_process', 'docker_build_with_restart')
 
 ### K8s Config ###
 
 # Uncomment to use secrets
 k8s_yaml('./infra/development/k8s/secrets.yaml')
-
 k8s_yaml('./infra/development/k8s/app-config.yaml')
 
 ### End of K8s Config ###
@@ -53,7 +51,6 @@ k8s_resource('api-gateway', port_forwards=8081,
 ### End of API Gateway ###
 ### Trip Service ###
 
-# Uncomment once we have a trip service
 
 trip_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/trip-service ./services/trip-service/cmd/main.go'
 if os.name == 'nt':
@@ -82,6 +79,36 @@ k8s_yaml('./infra/development/k8s/trip-service-deployment.yaml')
 k8s_resource('trip-service', resource_deps=['trip-service-compile','rabbitmq'], labels="services")
 
 ## end of trip service ##
+
+## login service
+
+login_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/login-service ./services/login-service/cmd/main.go'
+if os.name == 'nt':
+    login_compile_cmd = './infra/development/docker/login-build.bat'  
+local_resource(
+  'login-service-compile',
+  login_compile_cmd,
+  deps=['./services/login-service', './shared'], labels="compiles")
+docker_build_with_restart(
+  'ride-sharing/login-service', # image name
+  '.',
+  entrypoint=['/app/build/login-service'], 
+  dockerfile='./infra/development/docker/login-service.Dockerfile',
+  only=[ # only list provides context for Docker build, not for live updates
+    './build/login-service',
+    './shared',
+    './services/login-service/migrations', # Include migrations in the Docker image
+  ],
+  live_update=[
+    sync('./build', '/app/build'),
+    sync('./shared', '/app/shared'),
+  ],
+)
+
+k8s_yaml('./infra/development/k8s/login-service-deployment.yaml')
+k8s_resource('login-service', resource_deps=['login-service-compile'], labels="services")
+
+## End of login service ##
 
 ### Driver Service ###
 driver_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/driver-service ./services/driver-service'
@@ -202,3 +229,9 @@ k8s_resource('payment-service', resource_deps=['payment-service-compile', 'rabbi
 k8s_yaml('./infra/development/k8s/jaeger.yaml')
 k8s_resource('jaeger', port_forwards=['16686:16686', '14268:14268'], labels="tooling")
 ### End of Jaeger ###
+
+
+###Postges ###
+k8s_yaml('./infra/development/k8s/postgres-deployment.yaml')  
+k8s_resource('postgres', port_forwards=5432, labels='tooling')
+### End of Postgres ###

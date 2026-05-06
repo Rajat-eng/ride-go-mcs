@@ -14,6 +14,7 @@ import (
 	"ride-sharing/shared/tracing"
 
 	"github.com/redis/go-redis/v9"
+	"github.com/rs/cors"
 )
 
 var (
@@ -76,9 +77,13 @@ func main() {
 	// tracer.start becomes child span(cusotm span) for this middlware
 
 	// Route for trip preview
-	mux.Handle("POST /trip/preview", tracing.WrapHandlerFunc(enableCORS(HandleTripPreview), "/trip/preview"))
-	// mux.HandleFunc("POST /trip/start", enableCORS(HandleStartTrip))
-	mux.Handle("POST /trip/start", tracing.WrapHandlerFunc(enableCORS(HandleStartTrip), "/trip/start"))
+	mux.Handle("POST /trip/preview", tracing.WrapHandlerFunc(HandleTripPreview, "/trip/preview"))
+	mux.Handle("POST /trip/start", tracing.WrapHandlerFunc(HandleStartTrip, "/trip/start"))
+
+	// Auth routes
+	mux.Handle("POST /auth/signup", tracing.WrapHandlerFunc(HandleSignup, "/auth/signup"))
+	mux.Handle("POST /auth/login", tracing.WrapHandlerFunc(HandleLogin, "/auth/login"))
+	mux.Handle("POST /auth/refresh", tracing.WrapHandlerFunc(HandleRefreshToken, "/auth/refresh"))
 
 	mux.Handle("/ws/drivers", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleDriversWebSocket(w, r, rabbitmq, connManager)
@@ -90,9 +95,16 @@ func main() {
 		handleStripeWebhook(w, r, rabbitmq)
 	}, "/webhook/stripe"))
 
+	corsHandler := cors.New(cors.Options{
+		AllowedOrigins:   []string{"*"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Content-Type", "Authorization"},
+		AllowCredentials: false,
+	})
+
 	server := &http.Server{
 		Addr:    httpAddr,
-		Handler: mux,
+		Handler: corsHandler.Handler(mux),
 	}
 
 	// graceful shutdown

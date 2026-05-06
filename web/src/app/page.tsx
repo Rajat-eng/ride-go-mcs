@@ -11,6 +11,8 @@ import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CarPackageSlug } from '../types';
 import { DriverPackageSelector } from '../components/DriverPackageSelector';
+import { AuthForm } from '../components/AuthForm';
+import { useAuth } from '../hooks/useAuth';
 
 // Dynamically import components that use Leaflet
 const DriverMap = dynamic(() => import("../components/DriverMap").then(mod => mod.DriverMap), { ssr: false })
@@ -35,6 +37,7 @@ function HomeContent() {
   const searchParams = useSearchParams()
   const payment = searchParams.get("payment")
   const [packageSlug, setPackageSlug] = useState<CarPackageSlug | null>(null)
+  const { isAuthenticated } = useAuth();
 
   const handleClick = (userType: "driver" | "rider") => {
     setUserType(userType)
@@ -93,15 +96,23 @@ function HomeContent() {
         </div>
       )}
 
-      {userType === "driver" && packageSlug && (
+      {userType !== null && !isAuthenticated && (
+        <AuthForm
+          role={userType}
+          onSuccess={() => {}}
+          onBack={() => setUserType(null)}
+        />
+      )}
+
+      {userType === "driver" && isAuthenticated && packageSlug && (
         <DriverMap packageSlug={packageSlug} />
       )}
 
-      {userType === "driver" && !packageSlug && (
+      {userType === "driver" && isAuthenticated && !packageSlug && (
         <DriverPackageSelector onSelect={setPackageSlug} />
       )}
 
-      {userType === "rider" && <RiderMap />}
+      {userType === "rider" && isAuthenticated && <RiderMap />}
     </main>
   );
 }

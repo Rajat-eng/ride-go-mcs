@@ -12,7 +12,9 @@
     "@radix-ui/react-avatar": "1.1.2",
     "@radix-ui/react-scroll-area": "1.2.2",
     "@radix-ui/react-slot": "1.1.1",
+    "@reduxjs/toolkit": "^2.11.2",
     "@stripe/stripe-js": "5.6.0",
+    "axios": "^1.15.2",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "latlon-geohash": "2.0.0",
@@ -23,6 +25,7 @@
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-leaflet": "5.0.0",
+    "react-redux": "^9.2.0",
     "tailwind-merge": "2.6.0",
     "tailwindcss-animate": "1.0.7"
   },
