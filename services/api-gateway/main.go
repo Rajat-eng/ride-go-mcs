@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"ride-sharing/services/api-gateway/grpc_clients"
 	"ride-sharing/shared/env"
 	"ride-sharing/shared/messaging"
 	"ride-sharing/shared/tracing"
@@ -64,6 +65,25 @@ func main() {
 	log.Println("✅ Connected to Redis")
 
 	connManager := messaging.NewRedisConnectionManager(rdb)
+
+	// Initialize shared gRPC clients once at startup.
+	tripClient, err = grpc_clients.NewTripServiceClient()
+	if err != nil {
+		log.Fatalf("failed to create trip service client: %v", err)
+	}
+	defer tripClient.Close()
+
+	loginClient, err = grpc_clients.NewLoginServiceClient()
+	if err != nil {
+		log.Fatalf("failed to create login service client: %v", err)
+	}
+	defer loginClient.Close()
+
+	driverClient, err = grpc_clients.NewDriverServiceClient()
+	if err != nil {
+		log.Fatalf("failed to create driver service client: %v", err)
+	}
+	defer driverClient.Close()
 
 	mux := http.NewServeMux() // create a new ServeMux for routing
 

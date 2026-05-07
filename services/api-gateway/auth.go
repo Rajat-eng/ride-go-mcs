@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"ride-sharing/services/api-gateway/grpc_clients"
 	pb "ride-sharing/shared/proto/login"
 	"ride-sharing/shared/util"
 )
@@ -36,15 +35,7 @@ func HandleSignup(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	loginService, err := grpc_clients.NewLoginServiceClient()
-	if err != nil {
-		log.Printf("Error connecting to login service: %v", err)
-		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	defer loginService.Close()
-
-	resp, err := loginService.Client.Signup(r.Context(), &pb.SignupRequest{
+	resp, err := loginClient.Client.Signup(r.Context(), &pb.SignupRequest{
 		Email:       reqBody.Email,
 		Password:    reqBody.Password,
 		Name:        reqBody.Name,
@@ -70,15 +61,7 @@ func HandleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	loginService, err := grpc_clients.NewLoginServiceClient()
-	if err != nil {
-		log.Printf("Error connecting to login service: %v", err)
-		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	defer loginService.Close()
-
-	resp, err := loginService.Client.Login(r.Context(), &pb.LoginRequest{
+	resp, err := loginClient.Client.Login(r.Context(), &pb.LoginRequest{
 		Email:    reqBody.Email,
 		Password: reqBody.Password,
 	})
@@ -102,15 +85,7 @@ func HandleRefreshToken(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
-	loginService, err := grpc_clients.NewLoginServiceClient()
-	if err != nil {
-		log.Printf("Error connecting to login service: %v", err)
-		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
-		return
-	}
-	defer loginService.Close()
-
-	resp, err := loginService.Client.RefreshToken(r.Context(), &pb.RefreshTokenRequest{
+	resp, err := loginClient.Client.RefreshToken(r.Context(), &pb.RefreshTokenRequest{
 		RefreshToken: reqBody.RefreshToken,
 	})
 	if err != nil {

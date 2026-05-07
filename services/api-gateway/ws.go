@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	"ride-sharing/services/api-gateway/grpc_clients"
 	"ride-sharing/shared/contracts"
 	"ride-sharing/shared/messaging"
 	driver "ride-sharing/shared/proto/driver"
@@ -78,24 +77,18 @@ func handleDriversWebSocket(w http.ResponseWriter, r *http.Request, rb *messagin
 
 	// Add connection to manager
 	connManager.Add(userID, conn)
-	driverService, err := grpc_clients.NewDriverServiceClient()
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	// Closing connections
 	defer func() {
-		driverService.Client.UnregisterDriver(ctx, &driver.RegisterDriverRequest{
+		driverClient.Client.UnregisterDriver(ctx, &driver.RegisterDriverRequest{
 			DriverID:    userID,
 			PackageSlug: packageSlug,
 		})
 
-		driverService.Close() // closing grpc connection
-
 		log.Println("Driver unregistered: ", userID)
 	}()
 
-	driverData, err := driverService.Client.RegisterDriver(ctx, &driver.RegisterDriverRequest{
+	driverData, err := driverClient.Client.RegisterDriver(ctx, &driver.RegisterDriverRequest{
 		DriverID:    userID,
 		PackageSlug: packageSlug,
 	})

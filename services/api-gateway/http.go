@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"ride-sharing/services/api-gateway/grpc_clients"
 
 	"ride-sharing/shared/contracts"
 	"ride-sharing/shared/tracing"
@@ -43,20 +42,7 @@ func HandleTripPreview(w http.ResponseWriter, r *http.Request) {
 		util.RespondWithError(w, http.StatusBadRequest, "Validation failed", errors)
 		return
 	}
-	tripService, err := grpc_clients.NewTripServiceClient() // get our trip server fro rpc calls
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	// call trip service using gRPC
-	// new connection for every request is needed because
-	// if tripservice is down, then only this request will fail
-	// other requests will not be affected
-	// if we use a single connection for all requests, then if tripservice is down
-	// all requests will fail
-	defer tripService.Close()
-
-	tripPreview, err := tripService.Client.PreviewTrip(ctx, reqBody.toProto())
+	tripPreview, err := tripClient.Client.PreviewTrip(ctx, reqBody.toProto())
 	// tripPreviwew is pb.PreviewTripResponse
 	// it gives pb response
 	// need to convert to json response
@@ -88,11 +74,7 @@ func HandleStartTrip(w http.ResponseWriter, r *http.Request) {
 		util.RespondWithError(w, http.StatusBadRequest, "Validation failed", errors)
 		return
 	}
-	tripService, err := grpc_clients.NewTripServiceClient()
-	if err != nil {
-		log.Fatal(err)
-	}
-	trip, err := tripService.Client.CreateTrip(ctx, reqBody.toProto())
+	trip, err := tripClient.Client.CreateTrip(ctx, reqBody.toProto())
 	if err != nil {
 		log.Fatal(err)
 	}
