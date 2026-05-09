@@ -11,8 +11,8 @@ import (
 )
 
 type LoginServiceClient struct {
-	Client pb.LoginServiceClient
-	conn   *grpc.ClientConn
+	Client pb.LoginServiceClient // The actual gRPC client to call login service methods like Signup, Login, RefreshToken
+	conn   *grpc.ClientConn      // Keep the connection to close it gracefully on shutdown
 }
 
 func NewLoginServiceClient() (*LoginServiceClient, error) {
@@ -32,13 +32,14 @@ func NewLoginServiceClient() (*LoginServiceClient, error) {
 		return nil, err
 	}
 
-	client := pb.NewLoginServiceClient(conn)
+	client := pb.NewLoginServiceClient(conn) // Wrap the client with tracing interceptor
 	return &LoginServiceClient{Client: client, conn: conn}, nil
 }
 
 func (c *LoginServiceClient) Close() {
 	if c.conn != nil {
 		if err := c.conn.Close(); err != nil {
+			log.Println("failed to close login service connection:", err)
 			return
 		}
 	}

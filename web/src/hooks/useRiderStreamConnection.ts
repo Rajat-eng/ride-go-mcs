@@ -11,13 +11,13 @@ import {
   setError,
 } from '../store/slices/riderSlice';
 
-export function useRiderStreamConnection(location: Coordinate, userID: string) {
+export function useRiderStreamConnection(location: Coordinate, userID: string, accessToken: string) {
   const dispatch = useAppDispatch();
 
   useEffect(() => {
-    if (!userID) return;
+    if (!userID || !accessToken) return;
 
-    const ws = new WebSocket(`${WEBSOCKET_URL}${BackendEndpoints.WS_RIDERS}?userID=${userID}`);
+    const ws = new WebSocket(`${WEBSOCKET_URL}${BackendEndpoints.WS_RIDERS}?token=${encodeURIComponent(accessToken)}`);
 
     ws.onopen = () => {
       if (location) {
@@ -68,6 +68,5 @@ export function useRiderStreamConnection(location: Coordinate, userID: string) {
         ws.close();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userID, dispatch]);
+  }, [userID, accessToken, location, dispatch]);
 }

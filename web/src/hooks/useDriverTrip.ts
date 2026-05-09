@@ -18,6 +18,7 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
   const dispatch = useAppDispatch();
   const { driver, tripStatus, requestedTrip, error } = useAppSelector((s) => s.driver);
   const userID = useAppSelector((s) => s.auth.user?.id) ?? '';
+  const accessToken = useAppSelector((s) => s.auth.accessToken) ?? '';
   const [driverLocation, setDriverLocation] = useState<Coordinate>(START_LOCATION);
 
   const driverGeohash = useMemo(
@@ -29,6 +30,7 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
     location: driverLocation,
     geohash: driverGeohash,
     userID,
+    accessToken,
     packageSlug,
   });
 

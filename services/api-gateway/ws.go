@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"ride-sharing/shared/contracts"
 	"ride-sharing/shared/messaging"
-	driver "ride-sharing/shared/proto/driver"
 )
 
 func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ, connManager *messaging.RedisConnectionManager) {
@@ -17,11 +16,7 @@ func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging
 	}
 
 	defer conn.Close()
-	userID := r.URL.Query().Get("userID")
-	if userID == "" {
-		log.Println("No user ID provided")
-		return
-	}
+	userID, _ := r.Context().Value(ctxKeyUserID).(string)
 
 	// Add connection to manager
 	connManager.Add(userID, conn)
@@ -61,12 +56,7 @@ func handleDriversWebSocket(w http.ResponseWriter, r *http.Request, rb *messagin
 
 	defer conn.Close()
 
-	userID := r.URL.Query().Get("userID") // driver user ID
-	if userID == "" {
-		log.Println("No user ID provided")
-		return
-	}
-
+	userID, _ := r.Context().Value(ctxKeyUserID).(string)
 	packageSlug := r.URL.Query().Get("packageSlug") // which vehicle package the driver is using
 	if packageSlug == "" {
 		log.Println("No package slug provided")
@@ -77,33 +67,7 @@ func handleDriversWebSocket(w http.ResponseWriter, r *http.Request, rb *messagin
 
 	// Add connection to manager
 	connManager.Add(userID, conn)
-
-	// Closing connections
-	defer func() {
-		driverClient.Client.UnregisterDriver(ctx, &driver.RegisterDriverRequest{
-			DriverID:    userID,
-			PackageSlug: packageSlug,
-		})
-
-		log.Println("Driver unregistered: ", userID)
-	}()
-
-	driverData, err := driverClient.Client.RegisterDriver(ctx, &driver.RegisterDriverRequest{
-		DriverID:    userID,
-		PackageSlug: packageSlug,
-	})
-	if err != nil {
-		log.Printf("Error registering driver: %v", err)
-		return
-	}
-
-	if err := connManager.SendMessage(userID, contracts.WSMessage{
-		Type: contracts.DriverCmdRegister,
-		Data: driverData.Driver,
-	}); err != nil {
-		log.Printf("Error sending message: %v", err)
-		return
-	}
+	defer connManager.Remove(userID)
 
 	// Initialize queue consumers
 	queues := []string{

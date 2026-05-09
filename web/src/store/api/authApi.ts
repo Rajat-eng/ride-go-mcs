@@ -44,7 +44,6 @@ export interface LoginPayload {
 export interface AuthResponse {
   data: {
     accessToken: string;
-    refreshToken: string;
     user: AuthUser;
   };
 }

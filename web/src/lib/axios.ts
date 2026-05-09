@@ -9,6 +9,7 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // send the HttpOnly refresh_token cookie on every request
 });
 
 // Attach access token to every request
@@ -45,10 +46,8 @@ apiClient.interceptors.response.use(
 
     // If 401 and not already retrying, attempt token refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
-      const refreshToken = store.getState().auth.refreshToken;
-
-      // No refresh token available or it's the refresh endpoint itself failing
-      if (!refreshToken || originalRequest.url === '/auth/refresh') {
+      // If the refresh endpoint itself returned 401, the refresh token is invalid – logout
+      if (originalRequest.url === '/auth/refresh') {
         store.dispatch(logout());
         return Promise.reject(error);
       }
@@ -67,14 +66,13 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const { data } = await axios.post(`${API_URL}/auth/refresh`, { refreshToken });
+        // No body needed — the browser sends the HttpOnly refresh_token cookie automatically
+        const { data } = await axios.post(`${API_URL}/auth/refresh`, null, { withCredentials: true });
         const newAccessToken = data.data.accessToken;
-        const newRefreshToken = data.data.refreshToken;
 
         store.dispatch(setCredentials({
           user: store.getState().auth.user!,
           accessToken: newAccessToken,
-          refreshToken: newRefreshToken,
         }));
 
         processQueue(null, newAccessToken);

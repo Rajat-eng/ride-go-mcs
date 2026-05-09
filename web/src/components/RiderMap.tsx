@@ -32,13 +32,14 @@ interface RiderMapProps {
 export default function RiderMap({ onRouteSelected }: RiderMapProps) {
     const mapRef = useRef<L.Map>(null);
     const userID = useAppSelector((s) => s.auth.user?.id) ?? '';
+    const accessToken = useAppSelector((s) => s.auth.accessToken) ?? '';
 
     const location = {
         latitude: 12.920422,
         longitude: 77.611008,
     };
 
-    useRiderStreamConnection(location, userID);
+    useRiderStreamConnection(location, userID, accessToken);
 
     const { drivers, error, tripStatus, assignedDriver, paymentSession } = useAppSelector((s) => s.rider);
     const { trip, destination, handleMapClick, handleStartTrip, handleCancelTrip } = useRiderTrip(userID);

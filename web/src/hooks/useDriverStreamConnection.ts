@@ -17,6 +17,7 @@ interface useDriverConnectionProps {
   };
   geohash: string;
   userID: string;
+  accessToken: string;
   packageSlug: CarPackageSlug;
 }
 
@@ -24,15 +25,18 @@ export const useDriverStreamConnection = ({
   location,
   geohash,
   userID,
+  accessToken,
   packageSlug
 }: useDriverConnectionProps) => {
   const dispatch = useAppDispatch();
   const [ws, setWs] = useState<WebSocket | null>(null);
 
   useEffect(() => {
-    if (!userID) return;
+    if (!userID || !accessToken) return;
 
-    const websocket = new WebSocket(`${WEBSOCKET_URL}${BackendEndpoints.WS_DRIVERS}?userID=${userID}&packageSlug=${packageSlug}`);
+    const websocket = new WebSocket(
+      `${WEBSOCKET_URL}${BackendEndpoints.WS_DRIVERS}?token=${encodeURIComponent(accessToken)}&packageSlug=${encodeURIComponent(packageSlug)}`,
+    );
     setWs(websocket);
 
     websocket.onopen = () => {
@@ -81,7 +85,7 @@ export const useDriverStreamConnection = ({
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userID, dispatch]);
+  }, [userID, accessToken, packageSlug, location, geohash, dispatch]);
 
   const sendMessage = (message: ClientWsMessage) => {
     if (ws?.readyState === WebSocket.OPEN) {

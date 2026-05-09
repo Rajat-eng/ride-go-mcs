@@ -14,6 +14,8 @@ import (
 	"ride-sharing/shared/messaging"
 	"ride-sharing/shared/tracing"
 
+	"strings"
+
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/cors"
 )
@@ -97,29 +99,31 @@ func main() {
 	// tracer.start becomes child span(cusotm span) for this middlware
 
 	// Route for trip preview
-	mux.Handle("POST /trip/preview", tracing.WrapHandlerFunc(HandleTripPreview, "/trip/preview"))
-	mux.Handle("POST /trip/start", tracing.WrapHandlerFunc(HandleStartTrip, "/trip/start"))
+	mux.Handle("POST /trip/preview", wsAuthMiddleware(tracing.WrapHandlerFunc(HandleTripPreview, "/trip/preview")))
+	mux.Handle("POST /trip/start", wsAuthMiddleware(tracing.WrapHandlerFunc(HandleStartTrip, "/trip/start")))
 
 	// Auth routes
 	mux.Handle("POST /auth/signup", tracing.WrapHandlerFunc(HandleSignup, "/auth/signup"))
 	mux.Handle("POST /auth/login", tracing.WrapHandlerFunc(HandleLogin, "/auth/login"))
 	mux.Handle("POST /auth/refresh", tracing.WrapHandlerFunc(HandleRefreshToken, "/auth/refresh"))
+	mux.Handle("POST /auth/logout", tracing.WrapHandlerFunc(HandleLogout, "/auth/logout"))
 
-	mux.Handle("/ws/drivers", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/ws/drivers", wsAuthMiddleware(tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleDriversWebSocket(w, r, rabbitmq, connManager)
-	}, "/ws/drivers"))
-	mux.Handle("/ws/riders", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	}, "/ws/drivers")))
+	mux.Handle("/ws/riders", wsAuthMiddleware(tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleRidersWebSocket(w, r, rabbitmq, connManager)
-	}, "/ws/riders"))
-	mux.Handle("/webhook/stripe", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	}, "/ws/riders")))
+	mux.Handle("/webhook/stripe", wsAuthMiddleware(tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleStripeWebhook(w, r, rabbitmq)
-	}, "/webhook/stripe"))
+	}, "/webhook/stripe")))
 
+	allowedOrigins := strings.Split(env.GetString("ALLOWED_ORIGINS", "http://localhost:3000"), ",")
 	corsHandler := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Content-Type", "Authorization"},
-		AllowCredentials: false,
+		AllowCredentials: true,
 	})
 
 	server := &http.Server{

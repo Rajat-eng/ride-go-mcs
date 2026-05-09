@@ -33,6 +33,7 @@ func NewManager(secretKey string, accessExpiry, refreshExpiry time.Duration) *Ma
 }
 
 func (m *Manager) GenerateAccessToken(userID, email string) (string, error) {
+	// Create claims with user ID, email, and standard JWT claims like expiration and issued at
 	claims := AccessClaims{
 		UserID: userID,
 		Email:  email,
@@ -64,13 +65,13 @@ func (m *Manager) ValidateAccessToken(tokenStr string) (*AccessClaims, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
-		return m.secretKey, nil
+		return m.secretKey, nil // return the secret key for validation
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	claims, ok := token.Claims.(*AccessClaims)
+	claims, ok := token.Claims.(*AccessClaims) // token returns the claims if valid and we assert it to our AccessClaims struct
 	if !ok || !token.Valid {
 		return nil, fmt.Errorf("invalid token claims")
 	}
@@ -83,7 +84,7 @@ func (m *Manager) ValidateRefreshToken(tokenStr string) (*RefreshClaims, error) 
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
-		return m.secretKey, nil
+		return m.secretKey, nil // return the secret key for validation to ensure the token is valid and was signed with our secret
 	})
 	if err != nil {
 		return nil, err
