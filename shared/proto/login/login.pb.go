@@ -357,6 +357,110 @@ func (x *RefreshTokenResponse) GetRefreshToken() string {
 	return ""
 }
 
+type GoogleAuthRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IdToken       string                 `protobuf:"bytes,1,opt,name=idToken,proto3" json:"idToken,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GoogleAuthRequest) Reset() {
+	*x = GoogleAuthRequest{}
+	mi := &file_login_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GoogleAuthRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GoogleAuthRequest) ProtoMessage() {}
+
+func (x *GoogleAuthRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_login_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GoogleAuthRequest.ProtoReflect.Descriptor instead.
+func (*GoogleAuthRequest) Descriptor() ([]byte, []int) {
+	return file_login_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *GoogleAuthRequest) GetIdToken() string {
+	if x != nil {
+		return x.IdToken
+	}
+	return ""
+}
+
+type GoogleAuthResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AccessToken   string                 `protobuf:"bytes,1,opt,name=accessToken,proto3" json:"accessToken,omitempty"`
+	RefreshToken  string                 `protobuf:"bytes,2,opt,name=refreshToken,proto3" json:"refreshToken,omitempty"`
+	User          *User                  `protobuf:"bytes,3,opt,name=user,proto3" json:"user,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GoogleAuthResponse) Reset() {
+	*x = GoogleAuthResponse{}
+	mi := &file_login_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GoogleAuthResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GoogleAuthResponse) ProtoMessage() {}
+
+func (x *GoogleAuthResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_login_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GoogleAuthResponse.ProtoReflect.Descriptor instead.
+func (*GoogleAuthResponse) Descriptor() ([]byte, []int) {
+	return file_login_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GoogleAuthResponse) GetAccessToken() string {
+	if x != nil {
+		return x.AccessToken
+	}
+	return ""
+}
+
+func (x *GoogleAuthResponse) GetRefreshToken() string {
+	if x != nil {
+		return x.RefreshToken
+	}
+	return ""
+}
+
+func (x *GoogleAuthResponse) GetUser() *User {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
 type User struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -369,7 +473,7 @@ type User struct {
 
 func (x *User) Reset() {
 	*x = User{}
-	mi := &file_login_proto_msgTypes[6]
+	mi := &file_login_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -381,7 +485,7 @@ func (x *User) String() string {
 func (*User) ProtoMessage() {}
 
 func (x *User) ProtoReflect() protoreflect.Message {
-	mi := &file_login_proto_msgTypes[6]
+	mi := &file_login_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -394,7 +498,7 @@ func (x *User) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use User.ProtoReflect.Descriptor instead.
 func (*User) Descriptor() ([]byte, []int) {
-	return file_login_proto_rawDescGZIP(), []int{6}
+	return file_login_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *User) GetId() string {
@@ -450,16 +554,24 @@ const file_login_proto_rawDesc = "" +
 	"\frefreshToken\x18\x01 \x01(\tR\frefreshToken\"\\\n" +
 	"\x14RefreshTokenResponse\x12 \n" +
 	"\vaccessToken\x18\x01 \x01(\tR\vaccessToken\x12\"\n" +
-	"\frefreshToken\x18\x02 \x01(\tR\frefreshToken\"b\n" +
+	"\frefreshToken\x18\x02 \x01(\tR\frefreshToken\"-\n" +
+	"\x11GoogleAuthRequest\x12\x18\n" +
+	"\aidToken\x18\x01 \x01(\tR\aidToken\"{\n" +
+	"\x12GoogleAuthResponse\x12 \n" +
+	"\vaccessToken\x18\x01 \x01(\tR\vaccessToken\x12\"\n" +
+	"\frefreshToken\x18\x02 \x01(\tR\frefreshToken\x12\x1f\n" +
+	"\x04user\x18\x03 \x01(\v2\v.login.UserR\x04user\"b\n" +
 	"\x04User\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12 \n" +
-	"\vphoneNumber\x18\x04 \x01(\tR\vphoneNumber2\xc2\x01\n" +
+	"\vphoneNumber\x18\x04 \x01(\tR\vphoneNumber2\x85\x02\n" +
 	"\fLoginService\x125\n" +
 	"\x06Signup\x12\x14.login.SignupRequest\x1a\x15.login.SignupResponse\x122\n" +
 	"\x05Login\x12\x13.login.LoginRequest\x1a\x14.login.LoginResponse\x12G\n" +
-	"\fRefreshToken\x12\x1a.login.RefreshTokenRequest\x1a\x1b.login.RefreshTokenResponseB\x1aZ\x18shared/proto/login;loginb\x06proto3"
+	"\fRefreshToken\x12\x1a.login.RefreshTokenRequest\x1a\x1b.login.RefreshTokenResponse\x12A\n" +
+	"\n" +
+	"GoogleAuth\x12\x18.login.GoogleAuthRequest\x1a\x19.login.GoogleAuthResponseB\x1aZ\x18shared/proto/login;loginb\x06proto3"
 
 var (
 	file_login_proto_rawDescOnce sync.Once
@@ -473,7 +585,7 @@ func file_login_proto_rawDescGZIP() []byte {
 	return file_login_proto_rawDescData
 }
 
-var file_login_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_login_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_login_proto_goTypes = []any{
 	(*SignupRequest)(nil),        // 0: login.SignupRequest
 	(*SignupResponse)(nil),       // 1: login.SignupResponse
@@ -481,22 +593,27 @@ var file_login_proto_goTypes = []any{
 	(*LoginResponse)(nil),        // 3: login.LoginResponse
 	(*RefreshTokenRequest)(nil),  // 4: login.RefreshTokenRequest
 	(*RefreshTokenResponse)(nil), // 5: login.RefreshTokenResponse
-	(*User)(nil),                 // 6: login.User
+	(*GoogleAuthRequest)(nil),    // 6: login.GoogleAuthRequest
+	(*GoogleAuthResponse)(nil),   // 7: login.GoogleAuthResponse
+	(*User)(nil),                 // 8: login.User
 }
 var file_login_proto_depIdxs = []int32{
-	6, // 0: login.SignupResponse.user:type_name -> login.User
-	6, // 1: login.LoginResponse.user:type_name -> login.User
-	0, // 2: login.LoginService.Signup:input_type -> login.SignupRequest
-	2, // 3: login.LoginService.Login:input_type -> login.LoginRequest
-	4, // 4: login.LoginService.RefreshToken:input_type -> login.RefreshTokenRequest
-	1, // 5: login.LoginService.Signup:output_type -> login.SignupResponse
-	3, // 6: login.LoginService.Login:output_type -> login.LoginResponse
-	5, // 7: login.LoginService.RefreshToken:output_type -> login.RefreshTokenResponse
-	5, // [5:8] is the sub-list for method output_type
-	2, // [2:5] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	8, // 0: login.SignupResponse.user:type_name -> login.User
+	8, // 1: login.LoginResponse.user:type_name -> login.User
+	8, // 2: login.GoogleAuthResponse.user:type_name -> login.User
+	0, // 3: login.LoginService.Signup:input_type -> login.SignupRequest
+	2, // 4: login.LoginService.Login:input_type -> login.LoginRequest
+	4, // 5: login.LoginService.RefreshToken:input_type -> login.RefreshTokenRequest
+	6, // 6: login.LoginService.GoogleAuth:input_type -> login.GoogleAuthRequest
+	1, // 7: login.LoginService.Signup:output_type -> login.SignupResponse
+	3, // 8: login.LoginService.Login:output_type -> login.LoginResponse
+	5, // 9: login.LoginService.RefreshToken:output_type -> login.RefreshTokenResponse
+	7, // 10: login.LoginService.GoogleAuth:output_type -> login.GoogleAuthResponse
+	7, // [7:11] is the sub-list for method output_type
+	3, // [3:7] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_login_proto_init() }
@@ -510,7 +627,7 @@ func file_login_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_login_proto_rawDesc), len(file_login_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { useAuth } from '../hooks/useAuth';
+import { signIn } from 'next-auth/react';
 
 interface AuthFormProps {
   role: 'driver' | 'rider';
@@ -22,6 +23,10 @@ export function AuthForm({ role, onSuccess, onBack }: AuthFormProps) {
   const { signup, login, isSigningUp, isLoggingIn } = useAuth();
 
   const isLoading = isSigningUp || isLoggingIn;
+
+  const handleGoogleRedirect = () => {
+    signIn('google', { callbackUrl: '/auth/callback' });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,6 +105,10 @@ export function AuthForm({ role, onSuccess, onBack }: AuthFormProps) {
 
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? 'Please wait...' : mode === 'login' ? 'Login' : 'Create Account'}
+            </Button>
+
+            <Button type="button" variant="outline" className="w-full" onClick={handleGoogleRedirect}>
+              Continue with Google
             </Button>
           </form>
 

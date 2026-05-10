@@ -84,7 +84,6 @@ export const useDriverStreamConnection = ({
         websocket.close();
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userID, accessToken, packageSlug, location, geohash, dispatch]);
 
   const sendMessage = (message: ClientWsMessage) => {

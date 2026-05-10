@@ -100,3 +100,30 @@ func (h *LoginGRPCHandler) RefreshToken(ctx context.Context, req *pb.RefreshToke
 		RefreshToken: refreshToken,
 	}, nil
 }
+
+func (h *LoginGRPCHandler) GoogleAuth(ctx context.Context, req *pb.GoogleAuthRequest) (*pb.GoogleAuthResponse, error) {
+	if req.IdToken == "" {
+		return nil, status.Error(codes.InvalidArgument, "id token is required")
+	}
+
+	user, accessToken, refreshToken, err := h.authService.GoogleAuth(ctx, req.IdToken)
+	if err != nil {
+		switch err {
+		case service.ErrInvalidCredentials:
+			return nil, status.Error(codes.Unauthenticated, "invalid google token")
+		default:
+			return nil, status.Error(codes.Internal, "failed to authenticate with google")
+		}
+	}
+
+	return &pb.GoogleAuthResponse{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		User: &pb.User{
+			Id:          user.ID,
+			Email:       user.Email,
+			Name:        user.Name,
+			PhoneNumber: user.PhoneNumber,
+		},
+	}, nil
+}

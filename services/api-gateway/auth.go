@@ -53,6 +53,10 @@ type LoginRequest struct {
 	Password string `json:"password" validate:"required,min=1"`
 }
 
+type GoogleAuthRequest struct {
+	IDToken string `json:"idToken" validate:"required"`
+}
+
 func HandleSignup(w http.ResponseWriter, r *http.Request) {
 	_, span := tracer.Start(r.Context(), "handleSignup")
 	defer span.End()
@@ -142,4 +146,31 @@ func HandleRefreshToken(w http.ResponseWriter, r *http.Request) {
 func HandleLogout(w http.ResponseWriter, r *http.Request) {
 	clearRefreshCookie(w)
 	util.RespondWithSuccess(w, http.StatusOK, "Logged out", nil)
+}
+
+func HandleGoogleAuth(w http.ResponseWriter, r *http.Request) {
+	_, span := tracer.Start(r.Context(), "handleGoogleAuth")
+	defer span.End()
+
+	var reqBody GoogleAuthRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	resp, err := loginClient.Client.GoogleAuth(r.Context(), &pb.GoogleAuthRequest{
+		IdToken: reqBody.IDToken,
+	})
+	if err != nil {
+		log.Printf("Google auth error: %v", err)
+		util.RespondWithError(w, http.StatusUnauthorized, err.Error(), nil)
+		return
+	}
+
+	setRefreshCookie(w, resp.RefreshToken)
+	util.RespondWithSuccess(w, http.StatusOK, "Google login successful", authResponse{
+		AccessToken: resp.AccessToken,
+		User:        resp.User,
+	})
 }

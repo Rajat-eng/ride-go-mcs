@@ -105,6 +105,7 @@ func main() {
 	// Auth routes
 	mux.Handle("POST /auth/signup", tracing.WrapHandlerFunc(HandleSignup, "/auth/signup"))
 	mux.Handle("POST /auth/login", tracing.WrapHandlerFunc(HandleLogin, "/auth/login"))
+	mux.Handle("POST /auth/google", tracing.WrapHandlerFunc(HandleGoogleAuth, "/auth/google"))
 	mux.Handle("POST /auth/refresh", tracing.WrapHandlerFunc(HandleRefreshToken, "/auth/refresh"))
 	mux.Handle("POST /auth/logout", tracing.WrapHandlerFunc(HandleLogout, "/auth/logout"))
 

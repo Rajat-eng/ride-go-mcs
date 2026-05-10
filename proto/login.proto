@@ -8,6 +8,7 @@ service LoginService {
   rpc Signup(SignupRequest) returns (SignupResponse);
   rpc Login(LoginRequest) returns (LoginResponse);
   rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+  rpc GoogleAuth(GoogleAuthRequest) returns (GoogleAuthResponse);
 }
 
 message SignupRequest {
@@ -41,6 +42,16 @@ message RefreshTokenRequest {
 message RefreshTokenResponse {
   string accessToken = 1;
   string refreshToken = 2;
+}
+
+message GoogleAuthRequest {
+  string idToken = 1;
+}
+
+message GoogleAuthResponse {
+  string accessToken = 1;
+  string refreshToken = 2;
+  User user = 3;
 }
 
 message User {

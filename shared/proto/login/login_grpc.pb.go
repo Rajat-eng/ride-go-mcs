@@ -22,6 +22,7 @@ const (
 	LoginService_Signup_FullMethodName       = "/login.LoginService/Signup"
 	LoginService_Login_FullMethodName        = "/login.LoginService/Login"
 	LoginService_RefreshToken_FullMethodName = "/login.LoginService/RefreshToken"
+	LoginService_GoogleAuth_FullMethodName   = "/login.LoginService/GoogleAuth"
 )
 
 // LoginServiceClient is the client API for LoginService service.
@@ -31,6 +32,7 @@ type LoginServiceClient interface {
 	Signup(ctx context.Context, in *SignupRequest, opts ...grpc.CallOption) (*SignupResponse, error)
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
 	RefreshToken(ctx context.Context, in *RefreshTokenRequest, opts ...grpc.CallOption) (*RefreshTokenResponse, error)
+	GoogleAuth(ctx context.Context, in *GoogleAuthRequest, opts ...grpc.CallOption) (*GoogleAuthResponse, error)
 }
 
 type loginServiceClient struct {
@@ -71,6 +73,16 @@ func (c *loginServiceClient) RefreshToken(ctx context.Context, in *RefreshTokenR
 	return out, nil
 }
 
+func (c *loginServiceClient) GoogleAuth(ctx context.Context, in *GoogleAuthRequest, opts ...grpc.CallOption) (*GoogleAuthResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GoogleAuthResponse)
+	err := c.cc.Invoke(ctx, LoginService_GoogleAuth_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LoginServiceServer is the server API for LoginService service.
 // All implementations must embed UnimplementedLoginServiceServer
 // for forward compatibility.
@@ -78,6 +90,7 @@ type LoginServiceServer interface {
 	Signup(context.Context, *SignupRequest) (*SignupResponse, error)
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
 	RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error)
+	GoogleAuth(context.Context, *GoogleAuthRequest) (*GoogleAuthResponse, error)
 	mustEmbedUnimplementedLoginServiceServer()
 }
 
@@ -96,6 +109,9 @@ func (UnimplementedLoginServiceServer) Login(context.Context, *LoginRequest) (*L
 }
 func (UnimplementedLoginServiceServer) RefreshToken(context.Context, *RefreshTokenRequest) (*RefreshTokenResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RefreshToken not implemented")
+}
+func (UnimplementedLoginServiceServer) GoogleAuth(context.Context, *GoogleAuthRequest) (*GoogleAuthResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GoogleAuth not implemented")
 }
 func (UnimplementedLoginServiceServer) mustEmbedUnimplementedLoginServiceServer() {}
 func (UnimplementedLoginServiceServer) testEmbeddedByValue()                      {}
@@ -172,6 +188,24 @@ func _LoginService_RefreshToken_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LoginService_GoogleAuth_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GoogleAuthRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LoginServiceServer).GoogleAuth(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LoginService_GoogleAuth_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LoginServiceServer).GoogleAuth(ctx, req.(*GoogleAuthRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LoginService_ServiceDesc is the grpc.ServiceDesc for LoginService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -190,6 +224,10 @@ var LoginService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RefreshToken",
 			Handler:    _LoginService_RefreshToken_Handler,
+		},
+		{
+			MethodName: "GoogleAuth",
+			Handler:    _LoginService_GoogleAuth_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
