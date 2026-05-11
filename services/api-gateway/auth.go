@@ -7,6 +7,7 @@ import (
 	"ride-sharing/shared/env"
 	pb "ride-sharing/shared/proto/login"
 	"ride-sharing/shared/util"
+	"time"
 )
 
 const refreshTokenCookie = "refresh_token"
@@ -27,17 +28,22 @@ func setRefreshCookie(w http.ResponseWriter, token string) {
 		MaxAge:   7 * 24 * 60 * 60, // 7 days
 		HttpOnly: true,
 		Secure:   secure,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: http.SameSiteLaxMode,
 	})
+	log.Printf("refresh_token cookie set (len=%d)", len(token))
 }
 
 func clearRefreshCookie(w http.ResponseWriter) {
+	secure := env.GetString("ENVIRONMENT", "development") != "development"
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshTokenCookie,
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
 		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
 	})
 }
 
@@ -46,6 +52,7 @@ type SignupRequest struct {
 	Password    string `json:"password" validate:"required,min=8"`
 	Name        string `json:"name" validate:"required,min=1"`
 	PhoneNumber string `json:"phoneNumber"`
+	Role        string `json:"role"`
 }
 
 type LoginRequest struct {
@@ -55,6 +62,7 @@ type LoginRequest struct {
 
 type GoogleAuthRequest struct {
 	IDToken string `json:"idToken" validate:"required"`
+	Role    string `json:"role"`
 }
 
 func HandleSignup(w http.ResponseWriter, r *http.Request) {
@@ -73,6 +81,7 @@ func HandleSignup(w http.ResponseWriter, r *http.Request) {
 		Password:    reqBody.Password,
 		Name:        reqBody.Name,
 		PhoneNumber: reqBody.PhoneNumber,
+		Role:        reqBody.Role,
 	})
 	if err != nil {
 		log.Printf("Signup error: %v", err)
@@ -122,7 +131,7 @@ func HandleRefreshToken(w http.ResponseWriter, r *http.Request) {
 	defer span.End()
 
 	cookie, err := r.Cookie(refreshTokenCookie)
-	if err != nil {
+	if err != nil || cookie.Value == "" {
 		http.Error(w, "missing refresh token", http.StatusUnauthorized)
 		return
 	}
@@ -140,6 +149,7 @@ func HandleRefreshToken(w http.ResponseWriter, r *http.Request) {
 	setRefreshCookie(w, resp.RefreshToken)
 	util.RespondWithSuccess(w, http.StatusOK, "Token refreshed", authResponse{
 		AccessToken: resp.AccessToken,
+		User:        resp.User,
 	})
 }
 
@@ -161,13 +171,13 @@ func HandleGoogleAuth(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := loginClient.Client.GoogleAuth(r.Context(), &pb.GoogleAuthRequest{
 		IdToken: reqBody.IDToken,
+		Role:    reqBody.Role,
 	})
 	if err != nil {
 		log.Printf("Google auth error: %v", err)
 		util.RespondWithError(w, http.StatusUnauthorized, err.Error(), nil)
 		return
 	}
-
 	setRefreshCookie(w, resp.RefreshToken)
 	util.RespondWithSuccess(w, http.StatusOK, "Google login successful", authResponse{
 		AccessToken: resp.AccessToken,

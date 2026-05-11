@@ -31,7 +31,7 @@ spec:
         env:
         - name: NODE_ENV
           value: "development"
-        - name: NEXT_PUBLIC_API_URL
+        - name: GATEWAY_URL
           value: "http://api-gateway:8081"
         - name: NEXT_PUBLIC_WEBSOCKET_URL
           value: "ws://api-gateway:8081/ws"

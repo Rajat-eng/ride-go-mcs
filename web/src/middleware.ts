@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 // Routes the middleware should NOT guard (auth + static assets handled by matcher)
-const PUBLIC_PATHS = ['/auth/login', '/auth/signup'];
+const PUBLIC_PATHS = ['/auth/login', '/auth/signup', '/auth/callback'];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;

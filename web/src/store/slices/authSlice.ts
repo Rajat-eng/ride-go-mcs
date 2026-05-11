@@ -5,6 +5,7 @@ export interface AuthUser {
   email: string;
   name: string;
   phoneNumber: string;
+  role: 'rider' | 'driver';
 }
 
 interface AuthState {

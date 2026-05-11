@@ -25,7 +25,7 @@ export function AuthForm({ role, onSuccess, onBack }: AuthFormProps) {
   const isLoading = isSigningUp || isLoggingIn;
 
   const handleGoogleRedirect = () => {
-    signIn('google', { callbackUrl: '/auth/callback' });
+    signIn('google', { callbackUrl: `/auth/callback?role=${role}` });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -34,7 +34,7 @@ export function AuthForm({ role, onSuccess, onBack }: AuthFormProps) {
 
     try {
       if (mode === 'signup') {
-        await signup({ email, password, name, phoneNumber });
+        await signup({ email, password, name, phoneNumber, role });
       } else {
         await login({ email, password });
       }

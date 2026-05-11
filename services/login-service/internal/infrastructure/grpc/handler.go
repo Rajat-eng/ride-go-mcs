@@ -31,7 +31,7 @@ func (h *LoginGRPCHandler) Signup(ctx context.Context, req *pb.SignupRequest) (*
 		return nil, status.Error(codes.InvalidArgument, "password must be at least 8 characters")
 	}
 
-	user, accessToken, refreshToken, err := h.authService.Signup(ctx, req.Email, req.Password, req.Name, req.PhoneNumber)
+	user, accessToken, refreshToken, err := h.authService.Signup(ctx, req.Email, req.Password, req.Name, req.PhoneNumber, req.Role)
 	if err != nil {
 		switch err {
 		case service.ErrEmailAlreadyExists:
@@ -49,6 +49,7 @@ func (h *LoginGRPCHandler) Signup(ctx context.Context, req *pb.SignupRequest) (*
 			Email:       user.Email,
 			Name:        user.Name,
 			PhoneNumber: user.PhoneNumber,
+			Role:        user.Role,
 		},
 	}, nil
 }
@@ -76,6 +77,7 @@ func (h *LoginGRPCHandler) Login(ctx context.Context, req *pb.LoginRequest) (*pb
 			Email:       user.Email,
 			Name:        user.Name,
 			PhoneNumber: user.PhoneNumber,
+			Role:        user.Role,
 		},
 	}, nil
 }
@@ -85,7 +87,7 @@ func (h *LoginGRPCHandler) RefreshToken(ctx context.Context, req *pb.RefreshToke
 		return nil, status.Error(codes.InvalidArgument, "refresh token is required")
 	}
 
-	accessToken, refreshToken, err := h.authService.RefreshToken(ctx, req.RefreshToken)
+	user, accessToken, refreshToken, err := h.authService.RefreshToken(ctx, req.RefreshToken)
 	if err != nil {
 		switch err {
 		case service.ErrInvalidToken:
@@ -98,6 +100,13 @@ func (h *LoginGRPCHandler) RefreshToken(ctx context.Context, req *pb.RefreshToke
 	return &pb.RefreshTokenResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+		User: &pb.User{
+			Id:          user.ID,
+			Email:       user.Email,
+			Name:        user.Name,
+			PhoneNumber: user.PhoneNumber,
+			Role:        user.Role,
+		},
 	}, nil
 }
 
@@ -106,7 +115,7 @@ func (h *LoginGRPCHandler) GoogleAuth(ctx context.Context, req *pb.GoogleAuthReq
 		return nil, status.Error(codes.InvalidArgument, "id token is required")
 	}
 
-	user, accessToken, refreshToken, err := h.authService.GoogleAuth(ctx, req.IdToken)
+	user, accessToken, refreshToken, err := h.authService.GoogleAuth(ctx, req.IdToken, req.Role)
 	if err != nil {
 		switch err {
 		case service.ErrInvalidCredentials:
@@ -124,6 +133,7 @@ func (h *LoginGRPCHandler) GoogleAuth(ctx context.Context, req *pb.GoogleAuthReq
 			Email:       user.Email,
 			Name:        user.Name,
 			PhoneNumber: user.PhoneNumber,
+			Role:        user.Role,
 		},
 	}, nil
 }

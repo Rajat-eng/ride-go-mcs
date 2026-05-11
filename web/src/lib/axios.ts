@@ -47,8 +47,12 @@ apiClient.interceptors.response.use(
     // If 401 and not already retrying, attempt token refresh
     if (error.response?.status === 401 && !originalRequest._retry) {
       // If the refresh endpoint itself returned 401, the refresh token is invalid – logout
+      // BUT: skip logout if user already has valid credentials (e.g., set by OAuth callback before restore ran)
       if (originalRequest.url === '/auth/refresh') {
-        store.dispatch(logout());
+        const currentToken = store.getState().auth.accessToken;
+        if (!currentToken) {
+          store.dispatch(logout());
+        }
         return Promise.reject(error);
       }
 

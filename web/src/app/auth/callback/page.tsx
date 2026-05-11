@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { API_URL } from '../../../constants';
 import { useAppDispatch } from '../../../store/store';
@@ -15,16 +15,20 @@ interface OAuthSessionResponse {
       email: string;
       name: string;
       phoneNumber: string;
+      role: 'rider' | 'driver';
     };
   };
 }
 
-export default function OAuthCallbackPage() {
+function OAuthCallbackContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const dispatch = useAppDispatch();
   const [error, setError] = useState('');
   const exchangedRef = useRef(false);
+
+  const selectedRole = searchParams.get('role') === 'driver' ? 'driver' : 'rider';
 
   useEffect(() => {
     if (status === 'loading' || exchangedRef.current) {
@@ -36,7 +40,7 @@ export default function OAuthCallbackPage() {
       return;
     }
 
-    const googleIDToken = session?.googleIdToken; // set by next-auth callback route after successful Google OAuth exchange
+    const googleIDToken = session?.googleIdToken;
     if (!googleIDToken) {
       setError('Google token missing in session. Please sign in again.');
       return;
@@ -46,15 +50,13 @@ export default function OAuthCallbackPage() {
 
     const consumeSession = async () => {
       try {
-        // Send the Google ID token to the backend to exchange it for our own access token and user session 
-        // auth controller will verify the ID token with Google and create a session for the user if it's valid
         const response = await fetch(`${API_URL}/auth/google`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           credentials: 'include',
-          body: JSON.stringify({ idToken: googleIDToken }),
+          body: JSON.stringify({ idToken: googleIDToken, role: selectedRole }),
         });
 
         if (!response.ok) {
@@ -75,7 +77,7 @@ export default function OAuthCallbackPage() {
     };
 
     consumeSession();
-  }, [dispatch, router, session, status]);
+  }, [dispatch, router, selectedRole, session, status]);
 
   if (error) {
     return (
@@ -106,5 +108,24 @@ export default function OAuthCallbackPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function OAuthCallbackPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-gradient-to-b from-white to-gray-50">
+          <div className="flex flex-col items-center justify-center h-screen gap-4">
+            <div className="bg-white p-8 rounded-2xl shadow-lg text-center max-w-md w-full">
+              <h1 className="text-xl font-semibold text-gray-900">Completing Google Login</h1>
+              <p className="text-gray-600 mt-3">Please wait while we finalize your session.</p>
+            </div>
+          </div>
+        </main>
+      }
+    >
+      <OAuthCallbackContent />
+    </Suspense>
   );
 }

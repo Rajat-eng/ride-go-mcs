@@ -24,6 +24,14 @@ var (
 
 const defaultRole = "rider"
 
+func normalizeRole(role string) string {
+	role = strings.ToLower(strings.TrimSpace(role))
+	if role != "driver" && role != "rider" {
+		return defaultRole
+	}
+	return role
+}
+
 type AuthService struct {
 	repo         domain.UserRepository
 	tokenManager *token.Manager
@@ -36,8 +44,9 @@ func NewAuthService(repo domain.UserRepository, tokenManager *token.Manager) *Au
 	}
 }
 
-func (s *AuthService) Signup(ctx context.Context, email, password, name, phoneNumber string) (*domain.User, string, string, error) {
+func (s *AuthService) Signup(ctx context.Context, email, password, name, phoneNumber, role string) (*domain.User, string, string, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
+	role = normalizeRole(role)
 
 	_, err := s.repo.GetByEmail(ctx, email)
 	if err == nil {
@@ -57,7 +66,7 @@ func (s *AuthService) Signup(ctx context.Context, email, password, name, phoneNu
 		PasswordHash: string(hashedPassword),
 		Name:         name,
 		PhoneNumber:  phoneNumber,
-		Role:         defaultRole,
+		Role:         role,
 	}
 
 	if err := s.repo.Create(ctx, user); err != nil {
@@ -105,38 +114,39 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*domai
 	return user, accessToken, refreshToken, nil
 }
 
-func (s *AuthService) RefreshToken(ctx context.Context, refreshTokenStr string) (string, string, error) {
+func (s *AuthService) RefreshToken(ctx context.Context, refreshTokenStr string) (*domain.User, string, string, error) {
 	claims, err := s.tokenManager.ValidateRefreshToken(refreshTokenStr)
 	if err != nil {
-		return "", "", ErrInvalidToken
+		return nil, "", "", ErrInvalidToken
 	}
 
 	user, err := s.repo.GetByID(ctx, claims.UserID)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return "", "", ErrInvalidToken
+			return nil, "", "", ErrInvalidToken
 		}
-		return "", "", fmt.Errorf("failed to get user for refresh: %w", err)
+		return nil, "", "", fmt.Errorf("failed to get user for refresh: %w", err)
 	}
 
 	accessToken, err := s.tokenManager.GenerateAccessToken(user.ID, user.Email, user.Role)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to generate access token: %w", err)
+		return nil, "", "", fmt.Errorf("failed to generate access token: %w", err)
 	}
 
 	newRefreshToken, err := s.tokenManager.GenerateRefreshToken(claims.UserID)
 	if err != nil {
-		return "", "", fmt.Errorf("failed to generate refresh token: %w", err)
+		return nil, "", "", fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	return accessToken, newRefreshToken, nil
+	return user, accessToken, newRefreshToken, nil
 }
 
-func (s *AuthService) GoogleAuth(ctx context.Context, googleIDToken string) (*domain.User, string, string, error) {
+func (s *AuthService) GoogleAuth(ctx context.Context, googleIDToken, roleHint string) (*domain.User, string, string, error) {
 	audience := env.GetString("GOOGLE_CLIENT_ID", "")
 	if audience == "" {
 		return nil, "", "", fmt.Errorf("GOOGLE_CLIENT_ID is required")
 	}
+	roleHint = normalizeRole(roleHint)
 
 	googleClaims, err := validateGoogleIDToken(ctx, googleIDToken)
 	if err != nil {
@@ -176,7 +186,7 @@ func (s *AuthService) GoogleAuth(ctx context.Context, googleIDToken string) (*do
 				Email:        email,
 				PasswordHash: "",
 				Name:         name,
-				Role:         defaultRole,
+				Role:         roleHint,
 			}
 
 			// insert into users table and link to google identity in user_identities table in a transaction to ensure consistency

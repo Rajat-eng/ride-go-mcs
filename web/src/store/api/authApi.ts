@@ -34,6 +34,7 @@ export interface SignupPayload {
   password: string;
   name: string;
   phoneNumber?: string;
+  role: 'rider' | 'driver';
 }
 
 export interface LoginPayload {
@@ -66,7 +67,7 @@ export const authApi = createApi({
         data: payload,
       }),
     }),
-    refreshToken: builder.mutation<{ data: { accessToken: string; refreshToken: string } }, { refreshToken: string }>({
+    refreshToken: builder.mutation<{ data: { accessToken: string; refreshToken: string; user: AuthUser } }, { refreshToken: string }>({
       query: (payload) => ({
         url: '/auth/refresh',
         method: 'POST',

@@ -27,6 +27,7 @@ type SignupRequest struct {
 	Password      string                 `protobuf:"bytes,2,opt,name=password,proto3" json:"password,omitempty"`
 	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	PhoneNumber   string                 `protobuf:"bytes,4,opt,name=phoneNumber,proto3" json:"phoneNumber,omitempty"`
+	Role          string                 `protobuf:"bytes,5,opt,name=role,proto3" json:"role,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -85,6 +86,13 @@ func (x *SignupRequest) GetName() string {
 func (x *SignupRequest) GetPhoneNumber() string {
 	if x != nil {
 		return x.PhoneNumber
+	}
+	return ""
+}
+
+func (x *SignupRequest) GetRole() string {
+	if x != nil {
+		return x.Role
 	}
 	return ""
 }
@@ -309,6 +317,7 @@ type RefreshTokenResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	AccessToken   string                 `protobuf:"bytes,1,opt,name=accessToken,proto3" json:"accessToken,omitempty"`
 	RefreshToken  string                 `protobuf:"bytes,2,opt,name=refreshToken,proto3" json:"refreshToken,omitempty"`
+	User          *User                  `protobuf:"bytes,3,opt,name=user,proto3" json:"user,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -357,9 +366,17 @@ func (x *RefreshTokenResponse) GetRefreshToken() string {
 	return ""
 }
 
+func (x *RefreshTokenResponse) GetUser() *User {
+	if x != nil {
+		return x.User
+	}
+	return nil
+}
+
 type GoogleAuthRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	IdToken       string                 `protobuf:"bytes,1,opt,name=idToken,proto3" json:"idToken,omitempty"`
+	Role          string                 `protobuf:"bytes,2,opt,name=role,proto3" json:"role,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -397,6 +414,13 @@ func (*GoogleAuthRequest) Descriptor() ([]byte, []int) {
 func (x *GoogleAuthRequest) GetIdToken() string {
 	if x != nil {
 		return x.IdToken
+	}
+	return ""
+}
+
+func (x *GoogleAuthRequest) GetRole() string {
+	if x != nil {
+		return x.Role
 	}
 	return ""
 }
@@ -467,6 +491,7 @@ type User struct {
 	Email         string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
 	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	PhoneNumber   string                 `protobuf:"bytes,4,opt,name=phoneNumber,proto3" json:"phoneNumber,omitempty"`
+	Role          string                 `protobuf:"bytes,5,opt,name=role,proto3" json:"role,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -529,16 +554,24 @@ func (x *User) GetPhoneNumber() string {
 	return ""
 }
 
+func (x *User) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
 var File_login_proto protoreflect.FileDescriptor
 
 const file_login_proto_rawDesc = "" +
 	"\n" +
-	"\vlogin.proto\x12\x05login\"w\n" +
+	"\vlogin.proto\x12\x05login\"\x8b\x01\n" +
 	"\rSignupRequest\x12\x14\n" +
 	"\x05email\x18\x01 \x01(\tR\x05email\x12\x1a\n" +
 	"\bpassword\x18\x02 \x01(\tR\bpassword\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12 \n" +
-	"\vphoneNumber\x18\x04 \x01(\tR\vphoneNumber\"w\n" +
+	"\vphoneNumber\x18\x04 \x01(\tR\vphoneNumber\x12\x12\n" +
+	"\x04role\x18\x05 \x01(\tR\x04role\"w\n" +
 	"\x0eSignupResponse\x12 \n" +
 	"\vaccessToken\x18\x01 \x01(\tR\vaccessToken\x12\"\n" +
 	"\frefreshToken\x18\x02 \x01(\tR\frefreshToken\x12\x1f\n" +
@@ -551,21 +584,24 @@ const file_login_proto_rawDesc = "" +
 	"\frefreshToken\x18\x02 \x01(\tR\frefreshToken\x12\x1f\n" +
 	"\x04user\x18\x03 \x01(\v2\v.login.UserR\x04user\"9\n" +
 	"\x13RefreshTokenRequest\x12\"\n" +
-	"\frefreshToken\x18\x01 \x01(\tR\frefreshToken\"\\\n" +
+	"\frefreshToken\x18\x01 \x01(\tR\frefreshToken\"}\n" +
 	"\x14RefreshTokenResponse\x12 \n" +
 	"\vaccessToken\x18\x01 \x01(\tR\vaccessToken\x12\"\n" +
-	"\frefreshToken\x18\x02 \x01(\tR\frefreshToken\"-\n" +
+	"\frefreshToken\x18\x02 \x01(\tR\frefreshToken\x12\x1f\n" +
+	"\x04user\x18\x03 \x01(\v2\v.login.UserR\x04user\"A\n" +
 	"\x11GoogleAuthRequest\x12\x18\n" +
-	"\aidToken\x18\x01 \x01(\tR\aidToken\"{\n" +
+	"\aidToken\x18\x01 \x01(\tR\aidToken\x12\x12\n" +
+	"\x04role\x18\x02 \x01(\tR\x04role\"{\n" +
 	"\x12GoogleAuthResponse\x12 \n" +
 	"\vaccessToken\x18\x01 \x01(\tR\vaccessToken\x12\"\n" +
 	"\frefreshToken\x18\x02 \x01(\tR\frefreshToken\x12\x1f\n" +
-	"\x04user\x18\x03 \x01(\v2\v.login.UserR\x04user\"b\n" +
+	"\x04user\x18\x03 \x01(\v2\v.login.UserR\x04user\"v\n" +
 	"\x04User\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12 \n" +
-	"\vphoneNumber\x18\x04 \x01(\tR\vphoneNumber2\x85\x02\n" +
+	"\vphoneNumber\x18\x04 \x01(\tR\vphoneNumber\x12\x12\n" +
+	"\x04role\x18\x05 \x01(\tR\x04role2\x85\x02\n" +
 	"\fLoginService\x125\n" +
 	"\x06Signup\x12\x14.login.SignupRequest\x1a\x15.login.SignupResponse\x122\n" +
 	"\x05Login\x12\x13.login.LoginRequest\x1a\x14.login.LoginResponse\x12G\n" +
@@ -600,20 +636,21 @@ var file_login_proto_goTypes = []any{
 var file_login_proto_depIdxs = []int32{
 	8, // 0: login.SignupResponse.user:type_name -> login.User
 	8, // 1: login.LoginResponse.user:type_name -> login.User
-	8, // 2: login.GoogleAuthResponse.user:type_name -> login.User
-	0, // 3: login.LoginService.Signup:input_type -> login.SignupRequest
-	2, // 4: login.LoginService.Login:input_type -> login.LoginRequest
-	4, // 5: login.LoginService.RefreshToken:input_type -> login.RefreshTokenRequest
-	6, // 6: login.LoginService.GoogleAuth:input_type -> login.GoogleAuthRequest
-	1, // 7: login.LoginService.Signup:output_type -> login.SignupResponse
-	3, // 8: login.LoginService.Login:output_type -> login.LoginResponse
-	5, // 9: login.LoginService.RefreshToken:output_type -> login.RefreshTokenResponse
-	7, // 10: login.LoginService.GoogleAuth:output_type -> login.GoogleAuthResponse
-	7, // [7:11] is the sub-list for method output_type
-	3, // [3:7] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	8, // 2: login.RefreshTokenResponse.user:type_name -> login.User
+	8, // 3: login.GoogleAuthResponse.user:type_name -> login.User
+	0, // 4: login.LoginService.Signup:input_type -> login.SignupRequest
+	2, // 5: login.LoginService.Login:input_type -> login.LoginRequest
+	4, // 6: login.LoginService.RefreshToken:input_type -> login.RefreshTokenRequest
+	6, // 7: login.LoginService.GoogleAuth:input_type -> login.GoogleAuthRequest
+	1, // 8: login.LoginService.Signup:output_type -> login.SignupResponse
+	3, // 9: login.LoginService.Login:output_type -> login.LoginResponse
+	5, // 10: login.LoginService.RefreshToken:output_type -> login.RefreshTokenResponse
+	7, // 11: login.LoginService.GoogleAuth:output_type -> login.GoogleAuthResponse
+	8, // [8:12] is the sub-list for method output_type
+	4, // [4:8] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_login_proto_init() }

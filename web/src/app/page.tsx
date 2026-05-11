@@ -7,7 +7,7 @@ import icon from 'leaflet/dist/images/marker-icon.png'
 import iconShadow from 'leaflet/dist/images/marker-shadow.png'
 import dynamic from 'next/dynamic'
 import { Button } from "../components/ui/button";
-import { useState, Suspense } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CarPackageSlug } from '../types';
 import { DriverPackageSelector } from '../components/DriverPackageSelector';
@@ -37,7 +37,18 @@ function HomeContent() {
   const searchParams = useSearchParams()
   const payment = searchParams.get("payment")
   const [packageSlug, setPackageSlug] = useState<CarPackageSlug | null>(null)
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user, isRestoringSession } = useAuth();
+
+  useEffect(() => {
+    if (!isAuthenticated || !user?.role) {
+      return;
+    }
+
+    const desiredType = user.role === 'driver' ? 'driver' : 'rider';
+    if (userType !== desiredType) {
+      setUserType(desiredType);
+    }
+  }, [isAuthenticated, user?.role, userType]);
 
   const handleClick = (userType: "driver" | "rider") => {
     setUserType(userType)
@@ -72,7 +83,16 @@ function HomeContent() {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-white to-gray-50">
-      {userType === null && (
+      {isRestoringSession && (
+        <div className="flex flex-col items-center justify-center h-screen gap-4">
+          <div className="bg-white p-8 rounded-2xl shadow-lg text-center max-w-md w-full">
+            <h2 className="text-2xl font-bold text-gray-900 mb-3">Restoring Session</h2>
+            <p className="text-gray-600">Checking your secure login cookie...</p>
+          </div>
+        </div>
+      )}
+
+      {!isRestoringSession && userType === null && !isAuthenticated && (
         <div className="flex flex-col items-center justify-center h-screen gap-6 px-4">
           <div className="bg-white p-8 rounded-2xl shadow-lg text-center max-w-md w-full">
             <h2 className="text-2xl font-bold text-gray-900 mb-6">Welcome to RideShare</h2>
@@ -96,7 +116,7 @@ function HomeContent() {
         </div>
       )}
 
-      {userType !== null && !isAuthenticated && (
+      {!isRestoringSession && userType !== null && !isAuthenticated && (
         <AuthForm
           role={userType}
           onSuccess={() => {}}
