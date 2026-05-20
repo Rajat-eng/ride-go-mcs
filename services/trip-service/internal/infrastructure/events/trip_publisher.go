@@ -22,6 +22,16 @@ func (p *TripEventPublisher) PublishTripCreated(ctx context.Context, trip *domai
 	payload := &messaging.TripEventData{
 		Trip: trip.ToProto(),
 	}
+
+	// Extract pickup from the first coordinate of the route geometry
+	if trip.RideFare != nil && trip.RideFare.Route != nil && len(trip.RideFare.Route.Routes) > 0 {
+		coords := trip.RideFare.Route.Routes[0].Geometry.Coordinates
+		if len(coords) > 0 {
+			payload.PickupLat = coords[0][0] // lat
+			payload.PickupLng = coords[0][1] // lng
+		}
+	}
+
 	tripEventJSON, err := json.Marshal(payload) // marshal struct to JSON
 	if err != nil {
 		return err

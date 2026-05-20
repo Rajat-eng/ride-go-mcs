@@ -2,11 +2,14 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { Driver, TripPreview } from '../../types';
 import { PaymentEventSessionCreatedData, TripEvents } from '../../contracts';
 
+import { Coordinate } from '../../types';
+
 interface RiderState {
   drivers: Driver[];
   tripStatus: TripEvents | null;
   paymentSession: PaymentEventSessionCreatedData | null;
   assignedDriver: Driver | null;
+  assignedDriverLocation: Coordinate | null;
   trip: TripPreview | null;
   destination: [number, number] | null;
   error: string | null;
@@ -17,6 +20,7 @@ const initialState: RiderState = {
   tripStatus: null,
   paymentSession: null,
   assignedDriver: null,
+  assignedDriverLocation: null,
   trip: null,
   destination: null,
   error: null,
@@ -44,6 +48,9 @@ const riderSlice = createSlice({
     setDestination(state, action: PayloadAction<[number, number] | null>) {
       state.destination = action.payload;
     },
+    setAssignedDriverLocation(state, action: PayloadAction<Coordinate | null>) {
+      state.assignedDriverLocation = action.payload;
+    },
     setError(state, action: PayloadAction<string | null>) {
       state.error = action.payload;
     },
@@ -53,6 +60,7 @@ const riderSlice = createSlice({
       state.trip = null;
       state.destination = null;
       state.assignedDriver = null;
+      state.assignedDriverLocation = null;
     },
   },
 });
@@ -62,6 +70,7 @@ export const {
   setTripStatus,
   setPaymentSession,
   setAssignedDriver,
+  setAssignedDriverLocation,
   setTrip,
   setDestination,
   setError,

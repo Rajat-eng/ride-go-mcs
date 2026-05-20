@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../store/store';
 import {
   setTripStatus,
@@ -10,8 +10,8 @@ import { useDriverStreamConnection } from './useDriverStreamConnection';
 import * as Geohash from 'ngeohash';
 
 const START_LOCATION: Coordinate = {
-  latitude: 37.7749,
-  longitude: -122.4194,
+  latitude: 0,
+  longitude: 0,
 };
 
 export function useDriverTrip(packageSlug: CarPackageSlug) {
@@ -20,19 +20,30 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
   const userID = useAppSelector((s) => s.auth.user?.id) ?? '';
   const accessToken = useAppSelector((s) => s.auth.accessToken) ?? '';
   const [driverLocation, setDriverLocation] = useState<Coordinate>(START_LOCATION);
-
-  const driverGeohash = useMemo(
-    () => Geohash.encode(driverLocation.latitude, driverLocation.longitude, 7),
-    [driverLocation.latitude, driverLocation.longitude],
-  );
+  const [locationReady, setLocationReady] = useState(false);
 
   const { sendMessage } = useDriverStreamConnection({
-    location: driverLocation,
-    geohash: driverGeohash,
     userID,
     accessToken,
     packageSlug,
   });
+
+  // Switch to watchPosition so location updates continuously.
+  // Each new position: update the UI marker AND push to the backend over WS.
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition((pos) => {
+      const coord: Coordinate = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+      setDriverLocation(coord);
+      setLocationReady(true);
+      const gh = Geohash.encode(coord.latitude, coord.longitude, 7);
+      sendMessage({
+        type: TripEvents.DriverLocationUpdate,
+        data: { location: coord, geohash: gh },
+      });
+    });
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [sendMessage]);
 
   const handleMapClick = useCallback((latlng: { lat: number; lng: number }) => {
     setDriverLocation({ latitude: latlng.lat, longitude: latlng.lng });
@@ -75,6 +86,11 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
     dispatch(resetTrip());
   }, [requestedTrip, driver, sendMessage, dispatch]);
 
+  const driverGeohash = useMemo(
+    () => Geohash.encode(driverLocation.latitude, driverLocation.longitude, 7),
+    [driverLocation.latitude, driverLocation.longitude],
+  );
+
   const parsedRoute = useMemo(
     () =>
       requestedTrip?.route?.geometry[0]?.coordinates
@@ -99,6 +115,7 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
     requestedTrip,
     error,
     driverLocation,
+    locationReady,
     driverGeohash,
     parsedRoute,
     routeDestination,

@@ -73,7 +73,7 @@ func (s *AuthService) Signup(ctx context.Context, email, password, name, phoneNu
 		return nil, "", "", fmt.Errorf("failed to create user: %w", err)
 	}
 
-	accessToken, err := s.tokenManager.GenerateAccessToken(user.ID, user.Email, user.Role)
+	accessToken, err := s.tokenManager.GenerateAccessToken(user.ID, user.Name, user.Email, user.Role)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("failed to generate access token: %w", err)
 	}
@@ -101,7 +101,7 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*domai
 		return nil, "", "", ErrInvalidCredentials
 	}
 
-	accessToken, err := s.tokenManager.GenerateAccessToken(user.ID, user.Email, user.Role)
+	accessToken, err := s.tokenManager.GenerateAccessToken(user.ID, user.Name, user.Email, user.Role)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("failed to generate access token: %w", err)
 	}
@@ -128,7 +128,7 @@ func (s *AuthService) RefreshToken(ctx context.Context, refreshTokenStr string) 
 		return nil, "", "", fmt.Errorf("failed to get user for refresh: %w", err)
 	}
 
-	accessToken, err := s.tokenManager.GenerateAccessToken(user.ID, user.Email, user.Role)
+	accessToken, err := s.tokenManager.GenerateAccessToken(user.ID, user.Name, user.Email, user.Role)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("failed to generate access token: %w", err)
 	}
@@ -216,7 +216,7 @@ func (s *AuthService) GoogleAuth(ctx context.Context, googleIDToken, roleHint st
 		}
 	}
 	// generate tokens for the user (whether newly created or existing) and return
-	accessToken, err := s.tokenManager.GenerateAccessToken(user.ID, user.Email, user.Role)
+	accessToken, err := s.tokenManager.GenerateAccessToken(user.ID, user.Name, user.Email, user.Role)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("failed to generate access token: %w", err)
 	}

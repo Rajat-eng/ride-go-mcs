@@ -8,7 +8,7 @@ import (
 	"ride-sharing/services/trip-service/internal/domain"
 	"ride-sharing/shared/contracts"
 	"ride-sharing/shared/messaging"
-	pbd "ride-sharing/shared/proto/driver"
+	pb "ride-sharing/shared/proto/trip"
 
 	"github.com/rabbitmq/amqp091-go"
 )
@@ -39,7 +39,7 @@ func (c *driverConsumer) Listen() error {
 		log.Printf("driver response received message: %+v", payload)
 		switch msg.RoutingKey {
 		case contracts.DriverCmdTripAccept:
-			if err := c.handleTripAccepted(ctx, payload.TripID, payload.Driver); err != nil {
+			if err := c.handleTripAccepted(ctx, payload); err != nil {
 				log.Printf("Failed to handle the trip accept: %v", err)
 				return err
 			}
@@ -83,49 +83,55 @@ func (c *driverConsumer) handleTripDeclined(ctx context.Context, tripID, riderID
 
 	return nil
 }
-func (c *driverConsumer) handleTripAccepted(ctx context.Context, tripID string, driver *pbd.Driver) error {
-	// 1. Fetch the first
-	trip, err := c.service.GetTripByID(ctx, tripID)
+func (c *driverConsumer) handleTripAccepted(ctx context.Context, payload messaging.DriverTripResponseData) error {
+	// 1. Fetch the trip
+	trip, err := c.service.GetTripByID(ctx, payload.TripID)
 	if err != nil {
 		return err
 	}
 	if trip == nil {
-		return fmt.Errorf("Trip was not found %s", tripID)
+		return fmt.Errorf("trip was not found %s", payload.TripID)
 	}
-	// 2. Update the trip
-	if err := c.service.UpdateTrip(ctx, tripID, "accepted", driver); err != nil {
+
+	// 2. Build TripDriver from the enriched payload (gateway populated this from auth context)
+	tripDriver := &pb.TripDriver{
+		Id:   payload.DriverID,
+		Name: payload.DriverName,
+	}
+
+	// 3. Update the trip with status + driver
+	if err := c.service.UpdateTrip(ctx, payload.TripID, "accepted", tripDriver); err != nil {
 		log.Printf("Failed to update the trip: %v", err)
 		return err
 	}
-	trip, err = c.service.GetTripByID(ctx, tripID)
+	trip, err = c.service.GetTripByID(ctx, payload.TripID)
 	if err != nil {
 		return err
 	}
-	// 3. Driver has been assigned -> publish this event to rider
-	marshalledTrip, err := json.Marshal(trip)
+
+	// 4. Publish TripEventDriverAssigned with proto JSON so the rider gets lowercase keys
+	marshalledTrip, err := json.Marshal(trip.ToProto())
 	if err != nil {
 		return err
 	}
-	// Notify the rider that a driver has been assigned --. send to rider using ws
 	if err := c.rabbitmq.PublishMessage(ctx, contracts.TripEventDriverAssigned, contracts.AmqpMessage{
 		OwnerID: trip.UserID,
 		Data:    marshalledTrip,
 	}); err != nil {
 		return err
 	}
-	//Notify the payment service to start a payment session for this trip
+
+	// 5. Notify payment service
 	marshalledPayload, err := json.Marshal(messaging.PaymentTripResponseData{
-		TripID:   tripID,
+		TripID:   payload.TripID,
 		UserID:   trip.UserID,
-		DriverID: driver.Id,
+		DriverID: payload.DriverID,
 		Amount:   trip.RideFare.TotalPriceInCents,
 		Currency: "USD",
 	})
-
 	if err != nil {
 		return err
 	}
-
 	if err := c.rabbitmq.PublishMessage(ctx, contracts.PaymentCmdCreateSession,
 		contracts.AmqpMessage{
 			OwnerID: trip.UserID,

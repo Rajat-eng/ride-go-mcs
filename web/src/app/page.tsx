@@ -7,7 +7,7 @@ import icon from 'leaflet/dist/images/marker-icon.png'
 import iconShadow from 'leaflet/dist/images/marker-shadow.png'
 import dynamic from 'next/dynamic'
 import { Button } from "../components/ui/button";
-import { useEffect, useState, Suspense } from "react";
+import { useState, Suspense } from "react";
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CarPackageSlug } from '../types';
 import { DriverPackageSelector } from '../components/DriverPackageSelector';
@@ -32,6 +32,8 @@ if (typeof window !== 'undefined') {
 }
 
 function HomeContent() {
+  // userType tracks what the user explicitly clicked (before auth).
+  // Once authenticated the role from JWT is the source of truth.
   const [userType, setUserType] = useState<"driver" | "rider" | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -39,16 +41,10 @@ function HomeContent() {
   const [packageSlug, setPackageSlug] = useState<CarPackageSlug | null>(null)
   const { isAuthenticated, user, isRestoringSession } = useAuth();
 
-  useEffect(() => {
-    if (!isAuthenticated || !user?.role) {
-      return;
-    }
-
-    const desiredType = user.role === 'driver' ? 'driver' : 'rider';
-    if (userType !== desiredType) {
-      setUserType(desiredType);
-    }
-  }, [isAuthenticated, user?.role, userType]);
+  // After auth (including OAuth redirect), derive the role from JWT — no useEffect gap.
+  const effectiveUserType: "driver" | "rider" | null = isAuthenticated && user?.role
+    ? user.role
+    : userType;
 
   const handleClick = (userType: "driver" | "rider") => {
     setUserType(userType)
@@ -116,23 +112,25 @@ function HomeContent() {
         </div>
       )}
 
-      {!isRestoringSession && userType !== null && !isAuthenticated && (
+      {!isRestoringSession && effectiveUserType !== null && !isAuthenticated && (
         <AuthForm
-          role={userType}
+          role={effectiveUserType}
           onSuccess={() => {}}
           onBack={() => setUserType(null)}
         />
       )}
 
-      {userType === "driver" && isAuthenticated && packageSlug && (
-        <DriverMap packageSlug={packageSlug} />
-      )}
-
-      {userType === "driver" && isAuthenticated && !packageSlug && (
+      {/* Driver authenticated — ask for package slug before starting WS */}
+      {!isRestoringSession && effectiveUserType === "driver" && isAuthenticated && !packageSlug && (
         <DriverPackageSelector onSelect={setPackageSlug} />
       )}
 
-      {userType === "rider" && isAuthenticated && <RiderMap />}
+      {/* WS only starts here, after both auth + package selection */}
+      {!isRestoringSession && effectiveUserType === "driver" && isAuthenticated && packageSlug && (
+        <DriverMap packageSlug={packageSlug} />
+      )}
+
+      {!isRestoringSession && effectiveUserType === "rider" && isAuthenticated && <RiderMap />}
     </main>
   );
 }

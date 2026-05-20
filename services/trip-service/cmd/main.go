@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	grpcserver "google.golang.org/grpc"
 )
 
@@ -54,7 +55,18 @@ func main() {
 
 	// InMemoryRepository := repository.NewInmemoryRepository()
 	mongoDBRepo := repository.NewMongoRepository(mongoDb)
-	TripService := service.NewTripService(mongoDBRepo)
+
+	// Initialize Redis for ride fare storage (TTL: 20 min)
+	redisAddr := env.GetString("REDIS_URI", "redis:6379")
+	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		log.Fatalf("Failed to connect to Redis: %v", err)
+	}
+	defer rdb.Close()
+	log.Println("Connected to Redis")
+
+	redisRideFareRepo := repository.NewRedisRideFareRepository(rdb)
+	TripService := service.NewTripService(mongoDBRepo, redisRideFareRepo)
 
 	// rabbit mq connection
 	rabbitMqURI := env.GetString("RABBITMQ_URI", "amqp://guest:guest@rabbitmq:5672/")

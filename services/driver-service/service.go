@@ -1,84 +1,78 @@
 package main
 
 import (
-	math "math/rand/v2"
-	pb "ride-sharing/shared/proto/driver"
-	"ride-sharing/shared/util"
-	"sync"
+	"context"
+	"time"
 
-	"github.com/mmcloughlin/geohash"
+	"github.com/redis/go-redis/v9"
 )
 
-type driverInMap struct {
-	Driver *pb.Driver
-	// Index int
-	// TODO: route
-}
+const (
+	driverGeoKeyPrefix = "drivers:geo:" // GEOADD key per package slug
+	searchRadiusKM     = 10.0           // km radius for GEOSEARCH
+)
 
 type Service struct {
-	drivers []*driverInMap
-	mu      sync.Mutex
+	rdb *redis.Client
 }
 
-func NewService() *Service {
-	return &Service{
-		drivers: make([]*driverInMap, 0),
-	}
+func NewService(rdb *redis.Client) *Service {
+	return &Service{rdb: rdb}
 }
 
-func (s *Service) RegisterDriver(driverId string, packageSlug string) (*pb.Driver, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	randomIndex := math.IntN(len(PredefinedRoutes))
-	randomRoute := PredefinedRoutes[randomIndex]
-
-	randomPlate := GenerateRandomPlate()
-	randomAvatar := util.GetRandomAvatar(randomIndex)
-
-	// we can ignore this property for now, but it must be sent to the frontend.
-	geohash := geohash.Encode(randomRoute[0][0], randomRoute[0][1]) // first point of the route
-
-	driver := &pb.Driver{
-		Id:             driverId,
-		Geohash:        geohash,
-		Location:       &pb.Location{Latitude: randomRoute[0][0], Longitude: randomRoute[0][1]},
-		Name:           "Lando Norris",
-		PackageSlug:    packageSlug,
-		ProfilePicture: randomAvatar,
-		CarPlate:       randomPlate,
-	}
-
-	s.drivers = append(s.drivers, &driverInMap{
-		Driver: driver,
-	})
-
-	return driver, nil
+// UpdateDriverLocation upserts the driver's position in the Redis GEO index for the given package.
+// Calling this on the first location message effectively makes the driver available for trip matching.
+func (s *Service) UpdateDriverLocation(driverId, packageSlug string, lat, lng float64) error {
+	return s.rdb.GeoAdd(context.Background(), driverGeoKeyPrefix+packageSlug, &redis.GeoLocation{
+		Name:      driverId,
+		Longitude: lng,
+		Latitude:  lat,
+	}).Err()
 }
 
-func (s *Service) UnregisterDriver(driverId string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	for i, driver := range s.drivers {
-		if driver.Driver.Id == driverId {
-			s.drivers = append(s.drivers[:i], s.drivers[i+1:]...)
-		}
-	}
+// RemoveDriverFromGeo removes the driver from the GEO index so they no longer receive trip requests.
+func (s *Service) RemoveDriverFromGeo(driverId, packageSlug string) {
+	s.rdb.ZRem(context.Background(), driverGeoKeyPrefix+packageSlug, driverId)
 }
 
-func (s *Service) FindAvailableDrivers(packageType string) []string {
-	var matchingDrivers []string
+// FindAvailableDrivers returns driver IDs near pickupLat/Lng matching packageType.
+func (s *Service) FindAvailableDrivers(packageType string, pickupLat, pickupLng float64) []string {
+	ctx := context.Background()
+	geoKey := driverGeoKeyPrefix + packageType
 
-	for _, driver := range s.drivers {
-		if driver.Driver.PackageSlug == packageType {
-			matchingDrivers = append(matchingDrivers, driver.Driver.Id)
-		}
-	}
+	results, err := s.rdb.GeoSearch(ctx, geoKey, &redis.GeoSearchQuery{
+		Longitude:  pickupLng,
+		Latitude:   pickupLat,
+		Radius:     searchRadiusKM,
+		RadiusUnit: "km",
+		Sort:       "ASC",
+		Count:      10,
+	}).Result()
 
-	if len(matchingDrivers) == 0 {
+	if err != nil || len(results) == 0 {
 		return []string{}
 	}
 
-	return matchingDrivers
+	ids := make([]string, len(results))
+	// notify nearby drivers of this incoming ride request so they can respond with accept/decline
+	// this is done by the api-gateway consuming from the same GEO index and pushing trip requests to drivers via WS
+	copy(ids, results)
+	return ids
+}
+
+const activeRiderTTL = 2 * time.Hour
+
+// SetActiveRider records that driverID is currently serving riderID (stored until trip ends or TTL).
+func (s *Service) SetActiveRider(driverID, riderID string) error {
+	return s.rdb.Set(context.Background(), "driver:"+driverID+":active_rider", riderID, activeRiderTTL).Err()
+}
+
+// GetActiveRider returns the riderID currently paired with this driver, or ("", redis.Nil) if none.
+func (s *Service) GetActiveRider(driverID string) (string, error) {
+	return s.rdb.Get(context.Background(), "driver:"+driverID+":active_rider").Result()
+}
+
+// ClearActiveRider removes the driver→rider mapping when the trip ends.
+func (s *Service) ClearActiveRider(driverID string) {
+	s.rdb.Del(context.Background(), "driver:"+driverID+":active_rider")
 }

@@ -15,16 +15,24 @@ const (
 	NotifyPaymentSessionCreatedQueue = "notify_payment_session_created"
 	NotifyPaymentSuccessQueue        = "payment_success"
 	DeadLetterQueue                  = "dead_letter_queue"
+	DriverLocationUpdateQueue        = "driver_location_update" // driver location updates published by api-gateway, consumed by driver-service
+	DriverTripAssignedQueue          = "driver_trip_assigned"   // driver service stores driverID→riderID mapping when trip is accepted
+	NotifyRiderDriverLocationQueue   = "notify_rider_driver_location" // driver service publishes real-time location to rider via api-gateway
 )
 
 type TripEventData struct {
-	Trip *pb.Trip `json:"trip"` // Protobuf message for Trip bcoz tripModel is part of trip-service and cannot be imported here
+	Trip      *pb.Trip `json:"trip"`
+	PickupLat float64  `json:"pickupLat"`
+	PickupLng float64  `json:"pickupLng"`
 }
 
 type DriverTripResponseData struct {
-	Driver  *pbd.Driver `json:"driver"`
-	TripID  string      `json:"tripID"`
-	RiderID string      `json:"riderID"`
+	Driver      *pbd.Driver `json:"driver"`  // kept for backward compat but may be nil
+	TripID      string      `json:"tripID"`
+	RiderID     string      `json:"riderID"`
+	DriverID    string      `json:"driverID"`
+	DriverName  string      `json:"driverName"`
+	PackageSlug string      `json:"packageSlug"`
 }
 
 type PaymentEventSessionCreatedData struct {
@@ -46,4 +54,15 @@ type PaymentStatusUpdateData struct {
 	TripID   string `json:"tripID"`
 	UserID   string `json:"userID"`
 	DriverID string `json:"driverID"`
+}
+
+type DriverLocationUpdateData struct {
+	PackageSlug string  `json:"packageSlug"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+}
+
+type DriverLocationEventData struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
 }

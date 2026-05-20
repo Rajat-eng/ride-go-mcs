@@ -20,6 +20,8 @@ export enum TripEvents {
   DriverTripAccept = "driver.cmd.trip_accept",
   DriverTripDecline = "driver.cmd.trip_decline",
   DriverRegister = "driver.cmd.register",
+  DriverLocationUpdate = "driver.cmd.location_update",
+  DriverEventLocation = "driver.event.location",
   PaymentSessionCreated = "payment.event.session_created",
 }
 
@@ -28,13 +30,14 @@ export type ServerWsMessage =
   | PaymentSessionCreatedRequest
   | DriverAssignedRequest
   | DriverLocationRequest
+  | DriverEventLocationRequest
   | DriverTripRequest
   | DriverRegisterRequest
   | TripCreatedRequest
   | NoDriversFoundRequest;
 
 // Messages sent from the client to the server via the websocket
-export type ClientWsMessage = DriverResponseToTripResponse
+export type ClientWsMessage = DriverResponseToTripResponse | DriverLocationUpdateMessage
 
 interface TripCreatedRequest {
   type: TripEvents.Created;
@@ -76,12 +79,25 @@ interface DriverLocationRequest {
   data: Driver[];
 }
 
+interface DriverEventLocationRequest {
+  type: TripEvents.DriverEventLocation;
+  data: Coordinate;
+}
+
 interface DriverResponseToTripResponse {
   type: TripEvents.DriverTripAccept | TripEvents.DriverTripDecline;
   data: {
     tripID: string;
     riderID: string;
     driver: Driver;
+  };
+}
+
+interface DriverLocationUpdateMessage {
+  type: TripEvents.DriverLocationUpdate;
+  data: {
+    location: Coordinate;
+    geohash: string;
   };
 }
 

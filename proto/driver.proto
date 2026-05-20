@@ -5,13 +5,14 @@ package driver;
 option go_package = "shared/proto/driver;driver";
 
 service DriverService {
-  rpc RegisterDriver(RegisterDriverRequest) returns (RegisterDriverResponse);
   rpc UnregisterDriver(RegisterDriverRequest) returns (RegisterDriverResponse);
+  rpc UpdateLocation(UpdateLocationRequest) returns (UpdateLocationResponse);
 }
 
 message RegisterDriverRequest {
   string driverID = 1;
   string packageSlug = 2;
+  string name = 3;
 }
 
 message RegisterDriverResponse {
@@ -31,4 +32,14 @@ message Driver {
 message Location {
   double latitude = 1;
   double longitude = 2;
+}
+
+message UpdateLocationRequest {
+  string driverID = 1;
+  Location location = 2;
+  string packageSlug = 3;
+}
+
+message UpdateLocationResponse {
+
 }

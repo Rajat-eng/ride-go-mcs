@@ -39,6 +39,7 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
     requestedTrip,
     error,
     driverLocation,
+    locationReady,
     driverGeohash,
     parsedRoute,
     routeDestination,
@@ -50,6 +51,10 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
 
   if (error) {
     return <div>Error: {error}</div>
+  }
+
+  if (!locationReady) {
+    return <div>Waiting for location...</div>
   }
 
   return (

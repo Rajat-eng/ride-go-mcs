@@ -31,4 +31,7 @@ const (
 
 	// Payment commands (payment.cmd.*)
 	PaymentCmdCreateSession = "payment.cmd.create_session"
+
+	// Driver events (driver.event.*)
+	DriverEventLocation = "driver.event.location" // driver service → rider WS: real-time position of assigned driver
 )

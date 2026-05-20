@@ -14,3 +14,10 @@ type PaymentProcessor interface {
 	CreatePaymentSession(ctx context.Context, amount int64, currency string, metadata map[string]string) (string, error)
 	// GetSessionStatus(ctx context.Context, sessionID string) (types.PaymentStatus, error)
 }
+
+// SessionStore provides idempotency for payment session creation.
+// Get returns ("", nil) when no session exists for the key yet.
+type SessionStore interface {
+	Get(ctx context.Context, tripID string) (sessionID string, err error)
+	Set(ctx context.Context, tripID string, sessionID string) error
+}

@@ -15,6 +15,7 @@ type contextKey string
 const (
 	ctxKeyUserID contextKey = "userID"
 	ctxKeyToken  contextKey = "token"
+	ctxKeyName   contextKey = "name"
 )
 
 func wsAuthMiddleware(next http.Handler) http.Handler {
@@ -61,8 +62,11 @@ func wsAuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		name, _ := (*claims)["name"].(string)
+
 		ctx := context.WithValue(r.Context(), ctxKeyUserID, userID)
 		ctx = context.WithValue(ctx, ctxKeyToken, tokenStr)
+		ctx = context.WithValue(ctx, ctxKeyName, name)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

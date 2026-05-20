@@ -15,6 +15,7 @@ type Manager struct {
 
 type AccessClaims struct {
 	UserID string `json:"user_id"`
+	Name   string `json:"name"`
 	Email  string `json:"email"`
 	Role   string `json:"role"`
 	jwt.RegisteredClaims
@@ -33,10 +34,11 @@ func NewManager(secretKey string, accessExpiry, refreshExpiry time.Duration) *Ma
 	}
 }
 
-func (m *Manager) GenerateAccessToken(userID, email, role string) (string, error) {
-	// Create claims with user ID, email, and standard JWT claims like expiration and issued at
+func (m *Manager) GenerateAccessToken(userID, name, email, role string) (string, error) {
+	// Create claims with user ID, name, email, and standard JWT claims like expiration and issued at
 	claims := AccessClaims{
 		UserID: userID,
+		Name:   name,
 		Email:  email,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{

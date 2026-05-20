@@ -65,7 +65,6 @@ message Route {
 
 message RideFare {
   string id = 1;
-  string userID = 2;
   string packageSlug = 3;
   double totalPriceInCents = 4;
 }

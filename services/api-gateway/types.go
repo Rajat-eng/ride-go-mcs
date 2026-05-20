@@ -6,13 +6,11 @@ import (
 )
 
 type PreviewTripRequest struct {
-	UserID      string           `json:"userID" validate:"required,min=1"`
 	Pickup      types.Coordinate `json:"pickup"`
 	Destination types.Coordinate `json:"destination"`
 }
 
 type StartTripRequest struct {
-	UserID   string `json:"userID" validate:"required,min=1"`
 	RideFare string `json:"rideFareID" validate:"required,min=1"`
 }
 
@@ -23,17 +21,17 @@ func toProtoCoordinate(c types.Coordinate) *pb.Coordinate {
 	}
 }
 
-func (p *PreviewTripRequest) toProto() *pb.PreviewTripRequest {
+func (p *PreviewTripRequest) toProto(userID string) *pb.PreviewTripRequest {
 	return &pb.PreviewTripRequest{
-		UserID:        p.UserID,
+		UserID:        userID,
 		StartLocation: toProtoCoordinate(p.Pickup),
 		EndLocation:   toProtoCoordinate(p.Destination),
 	}
 }
 
-func (s *StartTripRequest) toProto() *pb.CreateTripRequest {
+func (s *StartTripRequest) toProto(userID string) *pb.CreateTripRequest {
 	return &pb.CreateTripRequest{
-		UserID:     s.UserID,
+		UserID:     userID,
 		RideFareID: s.RideFare,
 	}
 }

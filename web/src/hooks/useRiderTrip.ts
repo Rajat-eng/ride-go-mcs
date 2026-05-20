@@ -57,6 +57,7 @@ export function useRiderTrip(userID: string) {
   }, [trip?.tripID, dispatch, previewTrip, userID]);
 
   const handleStartTrip = useCallback(async (fare: RouteFare) => {
+    // called when user clicks "Confirm" on the trip overview screen
     if (!fare.id) {
       return;
     }

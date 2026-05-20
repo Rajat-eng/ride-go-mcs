@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { WEBSOCKET_URL } from "../constants";
 import { CarPackageSlug } from '../types';
 import { ServerWsMessage, TripEvents, isValidWsMessage, isValidTripEvent, ClientWsMessage, BackendEndpoints } from '../contracts';
@@ -11,42 +11,30 @@ import {
 } from '../store/slices/driverSlice';
 
 interface useDriverConnectionProps {
-  location: {
-    latitude: number;
-    longitude: number;
-  };
-  geohash: string;
   userID: string;
   accessToken: string;
   packageSlug: CarPackageSlug;
 }
 
 export const useDriverStreamConnection = ({
-  location,
-  geohash,
   userID,
   accessToken,
-  packageSlug
+  packageSlug,
 }: useDriverConnectionProps) => {
   const dispatch = useAppDispatch();
-  const [ws, setWs] = useState<WebSocket | null>(null);
+  // Ref instead of state — sendMessage always reads the live socket without
+  // needing to be recreated when the socket changes.
+  const wsRef = useRef<WebSocket | null>(null);
 
   useEffect(() => {
-    if (!userID || !accessToken) return;
+    if (!userID || !accessToken || !packageSlug) return;
 
     const websocket = new WebSocket(
       `${WEBSOCKET_URL}${BackendEndpoints.WS_DRIVERS}?token=${encodeURIComponent(accessToken)}&packageSlug=${encodeURIComponent(packageSlug)}`,
     );
-    setWs(websocket);
+    wsRef.current = websocket;
 
-    websocket.onopen = () => {
-      if (location) {
-        websocket.send(JSON.stringify({
-          type: TripEvents.DriverLocation,
-          data: { location, geohash },
-        }));
-      }
-    };
+    websocket.onopen = () => {};
 
     websocket.onmessage = (event) => {
       const message = JSON.parse(event.data) as ServerWsMessage;
@@ -73,26 +61,28 @@ export const useDriverStreamConnection = ({
       }
     };
 
-    websocket.onclose = () => {};
+    websocket.onclose = () => {
+      wsRef.current = null;
+    };
 
     websocket.onerror = () => {
       dispatch(setError('WebSocket error occurred'));
     };
 
     return () => {
-      if (websocket.readyState === WebSocket.OPEN) {
-        websocket.close();
-      }
+      websocket.close();
+      wsRef.current = null;
     };
-  }, [userID, accessToken, packageSlug, location, geohash, dispatch]);
+  }, [userID, accessToken, packageSlug, dispatch]);
 
-  const sendMessage = (message: ClientWsMessage) => {
+  // stable across renders — reads from ref so it always uses the live socket
+  const sendMessage = useCallback((message: ClientWsMessage) => {
+    const ws = wsRef.current;
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(message));
-    } else {
-      dispatch(setError('WebSocket is not connected'));
     }
-  };
+    // silently drop if not yet open — watchPosition will retry on next tick
+  }, []);
 
   return { sendMessage };
 }

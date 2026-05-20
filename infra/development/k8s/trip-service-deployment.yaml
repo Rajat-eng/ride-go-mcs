@@ -44,6 +44,11 @@ spec:
                 secretKeyRef:
                   name: mongodb
                   key: uri
+            - name: REDIS_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: REDIS_URI
 ---
 apiVersion: v1 
 kind: Service      

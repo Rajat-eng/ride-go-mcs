@@ -32,6 +32,12 @@ func HandleTripPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
+	userID, ok := r.Context().Value(ctxKeyUserID).(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	// validation
 	if err := types.Validate.Struct(reqBody); err != nil {
 		validationErrors := err.(validator.ValidationErrors)
@@ -42,7 +48,7 @@ func HandleTripPreview(w http.ResponseWriter, r *http.Request) {
 		util.RespondWithError(w, http.StatusBadRequest, "Validation failed", errors)
 		return
 	}
-	tripPreview, err := tripClient.Client.PreviewTrip(ctx, reqBody.toProto())
+	tripPreview, err := tripClient.Client.PreviewTrip(ctx, reqBody.toProto(userID))
 	// tripPreviwew is pb.PreviewTripResponse
 	// it gives pb response
 	// need to convert to json response
@@ -64,6 +70,13 @@ func HandleStartTrip(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer r.Body.Close()
+
+	userID, ok := r.Context().Value(ctxKeyUserID).(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
 	// validation
 	if err := types.Validate.Struct(reqBody); err != nil {
 		validationErrors := err.(validator.ValidationErrors)
@@ -74,7 +87,7 @@ func HandleStartTrip(w http.ResponseWriter, r *http.Request) {
 		util.RespondWithError(w, http.StatusBadRequest, "Validation failed", errors)
 		return
 	}
-	trip, err := tripClient.Client.CreateTrip(ctx, reqBody.toProto())
+	trip, err := tripClient.Client.CreateTrip(ctx, reqBody.toProto(userID))
 	if err != nil {
 		log.Fatal(err)
 	}

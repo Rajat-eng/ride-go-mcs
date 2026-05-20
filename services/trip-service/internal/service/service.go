@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"ride-sharing/services/trip-service/internal/domain"
 	tripTypes "ride-sharing/services/trip-service/pkg/types"
-	pbd "ride-sharing/shared/proto/driver"
 	pb "ride-sharing/shared/proto/trip"
 	"ride-sharing/shared/types"
 
@@ -16,13 +15,12 @@ import (
 )
 
 type TripService struct {
-	repo domain.TripRepository
+	repo     domain.TripRepository
+	fareRepo domain.RideFareRepository
 }
 
-//
-
-func NewTripService(repo domain.TripRepository) *TripService {
-	return &TripService{repo: repo}
+func NewTripService(repo domain.TripRepository, fareRepo domain.RideFareRepository) *TripService {
+	return &TripService{repo: repo, fareRepo: fareRepo}
 }
 
 // Implement service methods here bcoz NewTripSerice return tripservice --> it should implement all methods of tripService defined in domain
@@ -58,17 +56,14 @@ func (s *TripService) GetRoute(ctx context.Context, pickup, destination *types.C
 	}
 	var routeResponse tripTypes.OSRMApiResponse
 	if err := json.Unmarshal(body, &routeResponse); err != nil {
+		// convert to go struct osrmapiresponse from json data received from osrm api
 		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
 	}
-	// it gives unmarshalled osrm  --> like Route[Distance,Duration,Geometry[Coordinates]]
-	// need to convert to pb response
-	//  return routeResponse.ToProto(), nil
-
 	return &routeResponse, nil
 }
 
 func (s *TripService) GetAndValidateFare(ctx context.Context, fareID, userID string) (*domain.RideFareModel, error) {
-	fare, err := s.repo.GetRideFareByID(ctx, fareID)
+	fare, err := s.fareRepo.GetRideFareByID(ctx, fareID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get trip fare: %w", err)
 	}
@@ -115,29 +110,27 @@ func estimateFareRoute(f *domain.RideFareModel, route *tripTypes.OSRMApiResponse
 	}
 }
 
-func (s *TripService) GenerateTripFares(ctx context.Context, rideFares []*domain.RideFareModel, userID string, route *tripTypes.OSRMApiResponse) ([]*domain.RideFareModel, error) {
-	// for each estimate route package fare create a RideFareModel and save to db on preview trip with stored userID
-	fares := make([]*domain.RideFareModel, len(rideFares))
-
+func (s *TripService) GenerateTripFares(ctx context.Context, rideFares []*domain.RideFareModel, userID string, route *tripTypes.OSRMApiResponse) (*domain.FarePreview, error) {
+	options := make([]*domain.FarePreviewOption, len(rideFares))
 	for i, f := range rideFares {
-		id := primitive.NewObjectID() // id for RideFareModel
-
-		fare := &domain.RideFareModel{
-			UserID:            userID,
-			ID:                id,
-			TotalPriceInCents: f.TotalPriceInCents,
+		options[i] = &domain.FarePreviewOption{
+			ID:                primitive.NewObjectID(),
 			PackageSlug:       f.PackageSlug,
-			Route:             route,
+			TotalPriceInCents: f.TotalPriceInCents,
 		}
-
-		if err := s.repo.SaveRideFare(ctx, fare); err != nil {
-			return nil, fmt.Errorf("failed to save trip fare: %w", err)
-		}
-
-		fares[i] = fare
 	}
 
-	return fares, nil
+	// single write — overwrites any previous preview (cancel + retry safe)
+	preview := &domain.FarePreview{
+		UserID: userID,
+		Route:  route,
+		Fares:  options,
+	}
+	if err := s.fareRepo.SaveFarePreview(ctx, preview); err != nil {
+		return nil, fmt.Errorf("failed to save fare preview: %w", err)
+	}
+
+	return preview, nil
 }
 
 func getBaseFares() []*domain.RideFareModel {
@@ -165,6 +158,6 @@ func (s *TripService) GetTripByID(ctx context.Context, id string) (*domain.TripM
 	return s.repo.GetTripByID(ctx, id)
 }
 
-func (s *TripService) UpdateTrip(ctx context.Context, tripID string, status string, driver *pbd.Driver) error {
+func (s *TripService) UpdateTrip(ctx context.Context, tripID string, status string, driver *pb.TripDriver) error {
 	return s.repo.UpdateTrip(ctx, tripID, status, driver)
 }

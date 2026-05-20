@@ -5,13 +5,14 @@ import { useRiderStreamConnection } from '../hooks/useRiderStreamConnection';
 import { MapContainer, Marker, Popup, Rectangle, TileLayer } from 'react-leaflet'
 import L from 'leaflet';
 import { getGeohashBounds } from '../utils/geohash';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MapClickHandler } from './MapClickHandler';
 import { RoutingControl } from "./RoutingControl";
 import { RiderTripOverview } from './RiderTripOverview';
 import { useAppSelector } from '../store/store';
 import { useRiderTrip } from '../hooks/useRiderTrip';
 import { UserInfo } from './UserInfo';
+import { Coordinate } from '../types';
 
 const userMarker = new L.Icon({
     iconUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ed/Map_pin_icon.svg/176px-Map_pin_icon.svg.png",
@@ -34,10 +35,24 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
     const userID = useAppSelector((s) => s.auth.user?.id) ?? '';
     const accessToken = useAppSelector((s) => s.auth.accessToken) ?? '';
 
-    const location = {
-        latitude: 12.920422,
-        longitude: 77.611008,
-    };
+    const [location, setLocation] = useState<Coordinate | null>(null);
+    const [locationError, setLocationError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!navigator.geolocation) {
+            setLocationError('Geolocation is not supported by your browser');
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                setLocation({
+                    latitude: pos.coords.latitude,
+                    longitude: pos.coords.longitude,
+                });
+            },
+            () => setLocationError('Unable to retrieve your location'),
+        );
+    }, []);
 
     useRiderStreamConnection(location, userID, accessToken);
 
@@ -45,8 +60,17 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
     const { trip, destination, handleMapClick, handleStartTrip, handleCancelTrip } = useRiderTrip(userID);
 
     const onMapClick = async (e: L.LeafletMouseEvent) => {
+        if (!location) return;
         await handleMapClick(e.latlng, location, onRouteSelected);
     };
+
+    if (locationError) {
+        return <div>Location error: {locationError}</div>
+    }
+
+    if (!location) {
+        return <div>Waiting for location...</div>
+    }
 
     if (error) {
         return <div>Error: {error}</div>

@@ -23,23 +23,23 @@ func NewGrpcHandler(s *grpc.Server, service *Service) {
 	pb.RegisterDriverServiceServer(s, handler) // register our handler with grpc server
 }
 
-func (h *driverGrpcHandler) RegisterDriver(ctx context.Context, req *pb.RegisterDriverRequest) (*pb.RegisterDriverResponse, error) {
-	driver, err := h.service.RegisterDriver(req.GetDriverID(), req.GetPackageSlug())
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to register driver")
-	}
-
-	return &pb.RegisterDriverResponse{
-		Driver: driver,
-	}, nil
-}
-
 func (h *driverGrpcHandler) UnregisterDriver(ctx context.Context, req *pb.RegisterDriverRequest) (*pb.RegisterDriverResponse, error) {
-	h.service.UnregisterDriver(req.GetDriverID())
+	h.service.RemoveDriverFromGeo(req.GetDriverID(), req.GetPackageSlug())
 
 	return &pb.RegisterDriverResponse{
 		Driver: &pb.Driver{
 			Id: req.GetDriverID(),
 		},
 	}, nil
+}
+
+func (h *driverGrpcHandler) UpdateLocation(ctx context.Context, req *pb.UpdateLocationRequest) (*pb.UpdateLocationResponse, error) {
+	loc := req.GetLocation()
+	if loc == nil {
+		return nil, status.Errorf(codes.InvalidArgument, "location is required")
+	}
+	if err := h.service.UpdateDriverLocation(req.GetDriverID(), req.GetPackageSlug(), loc.GetLatitude(), loc.GetLongitude()); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to update driver location: %v", err)
+	}
+	return &pb.UpdateLocationResponse{}, nil
 }

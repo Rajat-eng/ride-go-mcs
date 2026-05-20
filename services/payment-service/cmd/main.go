@@ -8,12 +8,15 @@ import (
 	"syscall"
 
 	"ride-sharing/services/payment-service/internal/events"
+	redisstore "ride-sharing/services/payment-service/internal/infrastructure/redis"
 	"ride-sharing/services/payment-service/internal/infrastructure/stripe"
 	"ride-sharing/services/payment-service/internal/service"
 	"ride-sharing/services/payment-service/pkg/types"
 	"ride-sharing/shared/env"
 	"ride-sharing/shared/messaging"
 	"ride-sharing/shared/tracing"
+
+	"github.com/redis/go-redis/v9"
 )
 
 var GrpcAddr = env.GetString("GRPC_ADDR", ":9004")
@@ -56,7 +59,17 @@ func main() {
 	}
 
 	paymentProcessor := stripe.NewStripeClient(stripeCfg)
-	svc := service.NewPaymentService(paymentProcessor)
+
+	redisAddr := env.GetString("REDIS_URI", "redis:6379")
+	rdb := redis.NewClient(&redis.Options{Addr: redisAddr})
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		log.Fatalf("Failed to connect to Redis: %v", err)
+	}
+	defer rdb.Close()
+	log.Println("Connected to Redis")
+
+	sessionStore := redisstore.NewSessionStore(rdb)
+	svc := service.NewPaymentService(paymentProcessor, sessionStore)
 
 	log.Println(svc)
 

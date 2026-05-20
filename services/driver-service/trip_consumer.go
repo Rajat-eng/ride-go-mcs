@@ -46,7 +46,7 @@ func (c *tripConsumer) Listen() error {
 }
 
 func (c *tripConsumer) handleAndNotifyDrivers(ctx context.Context, payload messaging.TripEventData) error {
-	suitableIDs := c.service.FindAvailableDrivers(payload.Trip.SelectedFare.PackageSlug) // payload is of type TripEventData which is protobuf message
+	suitableIDs := c.service.FindAvailableDrivers(payload.Trip.SelectedFare.PackageSlug, payload.PickupLat, payload.PickupLng)
 
 	if len(suitableIDs) == 0 {
 		// 	If no driver → publish TripEventNoDriversFound (not bound to this queue, so goes elsewhere — consumed by user/gateway).
