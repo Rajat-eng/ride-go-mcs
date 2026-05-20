@@ -9,7 +9,7 @@ import (
 	pb "ride-sharing/shared/proto/driver"
 )
 
-func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ, connManager *messaging.RedisConnectionManager) {
+func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ, connManager *messaging.RedisConnectionManager, rl *RateLimiter) {
 	conn, err := connManager.Upgrade(w, r)
 	if err != nil {
 		log.Printf("WebSocket upgrade failed: %v", err)
@@ -18,6 +18,14 @@ func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging
 
 	defer conn.Close()
 	userID, _ := r.Context().Value(ctxKeyUserID).(string)
+
+	allowed, release := rl.WsConnectionGate(r.Context(), userID, 3)
+	if !allowed {
+		conn.Close()
+		log.Printf("WS connection rejected for user %s: too many connections", userID)
+		return
+	}
+	defer release()
 
 	// Add connection to manager
 	connManager.Add(userID, conn)
@@ -49,7 +57,7 @@ func handleRidersWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging
 	}
 }
 
-func handleDriversWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ, connManager *messaging.RedisConnectionManager) {
+func handleDriversWebSocket(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ, connManager *messaging.RedisConnectionManager, rl *RateLimiter) {
 	conn, err := connManager.Upgrade(w, r)
 	if err != nil {
 		log.Printf("WebSocket upgrade failed: %v", err)
@@ -65,6 +73,14 @@ func handleDriversWebSocket(w http.ResponseWriter, r *http.Request, rb *messagin
 		log.Println("No package slug provided")
 		return
 	}
+
+	allowed, release := rl.WsConnectionGate(r.Context(), userID, 3)
+	if !allowed {
+		conn.Close()
+		log.Printf("WS connection rejected for user %s: too many connections", userID)
+		return
+	}
+	defer release()
 
 	ctx := r.Context()
 

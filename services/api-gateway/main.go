@@ -67,6 +67,7 @@ func main() {
 	log.Println("✅ Connected to Redis")
 
 	connManager := messaging.NewRedisConnectionManager(rdb)
+	rateLimiter := NewRateLimiter(rdb)
 
 	// Initialize shared gRPC clients once at startup.
 	tripClient, err = grpc_clients.NewTripServiceClient()
@@ -98,9 +99,18 @@ func main() {
 	// tracing middleware adds extra headers, automatatic tracing , methods
 	// tracer.start becomes child span(cusotm span) for this middlware
 
-	// Route for trip preview
-	mux.Handle("POST /trip/preview", wsAuthMiddleware(tracing.WrapHandlerFunc(HandleTripPreview, "/trip/preview")))
-	mux.Handle("POST /trip/start", wsAuthMiddleware(tracing.WrapHandlerFunc(HandleStartTrip, "/trip/start")))
+	// Route for trip preview (30 req/min per user)
+	mux.Handle("POST /trip/preview", wsAuthMiddleware(
+		rateLimiter.Limit(30, 60, userKey("trip:preview"))(
+			tracing.WrapHandlerFunc(HandleTripPreview, "/trip/preview"),
+		),
+	))
+	// Trip creation (5 req/min per user)
+	mux.Handle("POST /trip/start", wsAuthMiddleware(
+		rateLimiter.Limit(5, 60, userKey("trip:start"))(
+			tracing.WrapHandlerFunc(HandleStartTrip, "/trip/start"),
+		),
+	))
 
 	// Auth routes
 	mux.Handle("POST /auth/signup", tracing.WrapHandlerFunc(HandleSignup, "/auth/signup"))
@@ -109,13 +119,15 @@ func main() {
 	mux.Handle("POST /auth/refresh", tracing.WrapHandlerFunc(HandleRefreshToken, "/auth/refresh"))
 	mux.Handle("POST /auth/logout", tracing.WrapHandlerFunc(HandleLogout, "/auth/logout"))
 
+	// WS connections (3 active per user, enforced inside the handler)
 	mux.Handle("/ws/drivers", wsAuthMiddleware(tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleDriversWebSocket(w, r, rabbitmq, connManager)
+		handleDriversWebSocket(w, r, rabbitmq, connManager, rateLimiter)
 	}, "/ws/drivers")))
 	mux.Handle("/ws/riders", wsAuthMiddleware(tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleRidersWebSocket(w, r, rabbitmq, connManager)
+		handleRidersWebSocket(w, r, rabbitmq, connManager, rateLimiter)
 	}, "/ws/riders")))
-	mux.Handle("/webhook/stripe", wsAuthMiddleware(tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// Stripe webhooks — no JWT auth, IP whitelist only
+	mux.Handle("/webhook/stripe", StripeIPWhitelist(tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleStripeWebhook(w, r, rabbitmq)
 	}, "/webhook/stripe")))
 
