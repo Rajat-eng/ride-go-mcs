@@ -38,7 +38,7 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
       setLocationReady(true);
       const gh = Geohash.encode(coord.latitude, coord.longitude, 7);
       sendMessage({
-        type: TripEvents.DriverLocationUpdate,
+        type: TripEvents.DriverLocation,
         data: { location: coord, geohash: gh },
       });
     });
@@ -50,8 +50,8 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
   }, []);
 
   const handleAcceptTrip = useCallback(() => {
-    if (!requestedTrip || !requestedTrip.id || !driver) {
-      alert("No trip ID found or driver is not set");
+    if (!requestedTrip || !requestedTrip.id) {
+      alert("No trip ID found");
       return;
     }
 
@@ -60,16 +60,15 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
       data: {
         tripID: requestedTrip.id,
         riderID: requestedTrip.userID,
-        driver,
       },
     });
 
     dispatch(setTripStatus(TripEvents.DriverTripAccept));
-  }, [requestedTrip, driver, sendMessage, dispatch]);
+  }, [requestedTrip, sendMessage, dispatch]);
 
   const handleDeclineTrip = useCallback(() => {
-    if (!requestedTrip || !requestedTrip.id || !driver) {
-      alert("No trip ID found or driver is not set");
+    if (!requestedTrip || !requestedTrip.id) {
+      alert("No trip ID found");
       return;
     }
 
@@ -78,13 +77,39 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
       data: {
         tripID: requestedTrip.id,
         riderID: requestedTrip.userID,
-        driver,
       },
+    });
+
+    sendMessage({
+      type: TripEvents.WsTopicUnsubscribe,
+      data: { topic: `trip:${requestedTrip.id}` },
     });
 
     dispatch(setTripStatus(TripEvents.DriverTripDecline));
     dispatch(resetTrip());
-  }, [requestedTrip, driver, sendMessage, dispatch]);
+  }, [requestedTrip, sendMessage, dispatch]);
+
+  const handleCancelTrip = useCallback(() => {
+    if (!requestedTrip || !requestedTrip.id) {
+      return;
+    }
+
+    // Reuse the decline command as driver-side cancellation for the current trip context.
+    sendMessage({
+      type: TripEvents.DriverTripDecline,
+      data: {
+        tripID: requestedTrip.id,
+        riderID: requestedTrip.userID,
+      },
+    });
+
+    sendMessage({
+      type: TripEvents.WsTopicUnsubscribe,
+      data: { topic: `trip:${requestedTrip.id}` },
+    });
+
+    dispatch(resetTrip());
+  }, [requestedTrip, sendMessage, dispatch]);
 
   const driverGeohash = useMemo(
     () => Geohash.encode(driverLocation.latitude, driverLocation.longitude, 7),
@@ -110,6 +135,7 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
 
   return {
     userID,
+    sendMessage,
     driver,
     tripStatus,
     requestedTrip,
@@ -123,5 +149,6 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
     handleMapClick,
     handleAcceptTrip,
     handleDeclineTrip,
+    handleCancelTrip,
   };
 }

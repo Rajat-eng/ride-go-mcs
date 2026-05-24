@@ -1,15 +1,3 @@
-// simulate_drivers is a dev tool that simulates N drivers connecting via WebSocket to the
-// api-gateway, sending location updates every 5 seconds in a random walk within 10 km of a
-// center point, and auto-accepting any trip requests they receive.
-//
-// Usage:
-//
-//	go run ./tools/simulate_drivers \
-//	  -url ws://localhost:8080/ws/drivers \
-//	  -secret change-me-in-production \
-//	  -lat 12.9352 -lng 77.6245 \
-//	  -count 3 \
-//	  -packages sedan,suv,van
 package main
 
 import (
@@ -27,8 +15,6 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// ── CLI flags ────────────────────────────────────────────────────────────────
-
 var (
 	wsURL       = flag.String("url", "ws://localhost:8080/ws/drivers", "api-gateway driver WS endpoint")
 	jwtSecret   = flag.String("secret", "change-me-in-production", "JWT signing secret (must match JWT_SECRET env in gateway)")
@@ -37,6 +23,8 @@ var (
 	countPerPkg = flag.Int("count", 3, "number of drivers per package")
 	packagesCSV = flag.String("packages", "sedan,suv,van", "comma-separated package slugs")
 	interval    = flag.Duration("interval", 5*time.Second, "location update interval")
+	response    = flag.String("response", "none", "auto response to trip request: none|accept|decline")
+	location    = flag.String("location", "static", "location mode: static|walk|none")
 )
 
 // ── WS message contracts ─────────────────────────────────────────────────────
@@ -50,6 +38,7 @@ const (
 	cmdLocation    = "driver.cmd.location"
 	cmdTripRequest = "driver.cmd.trip_request"
 	cmdTripAccept  = "driver.cmd.trip_accept"
+	cmdTripDecline = "driver.cmd.trip_decline"
 )
 
 // ── JWT ───────────────────────────────────────────────────────────────────────
@@ -114,8 +103,34 @@ func runDriver(id, pkg, name, token string, wg *sync.WaitGroup) {
 		lng: *centerLng + (math.Float64()-0.5)*0.02,
 	}
 
-	ticker := time.NewTicker(*interval)
-	defer ticker.Stop()
+	var ticker *time.Ticker
+	if *location == "walk" {
+		ticker = time.NewTicker(*interval)
+		defer ticker.Stop()
+	}
+
+	sendLocation := func() error {
+		payload, _ := json.Marshal(map[string]any{
+			"location": map[string]float64{
+				"latitude":  pos.lat,
+				"longitude": pos.lng,
+			},
+		})
+		msg, _ := json.Marshal(wsMessage{Type: cmdLocation, Data: payload})
+		if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+			return err
+		}
+		log.Printf("[%s] location → %.5f, %.5f", id, pos.lat, pos.lng)
+		return nil
+	}
+
+	// Static mode registers the driver at a fixed location once.
+	if *location == "static" {
+		if err := sendLocation(); err != nil {
+			log.Printf("[%s] initial location write error: %v", id, err)
+			return
+		}
+	}
 
 	// Channel to receive messages from the server
 	incoming := make(chan wsMessage, 8)
@@ -135,20 +150,19 @@ func runDriver(id, pkg, name, token string, wg *sync.WaitGroup) {
 
 	for {
 		select {
-		case <-ticker.C:
-			pos.step(*centerLat, *centerLng)
-			payload, _ := json.Marshal(map[string]any{
-				"location": map[string]float64{
-					"latitude":  pos.lat,
-					"longitude": pos.lng,
-				},
-			})
-			msg, _ := json.Marshal(wsMessage{Type: cmdLocation, Data: payload})
-			if err := conn.WriteMessage(websocket.TextMessage, msg); err != nil {
-				log.Printf("[%s] write error: %v", id, err)
-				return
+		case <-func() <-chan time.Time {
+			if ticker != nil {
+				return ticker.C
 			}
-			log.Printf("[%s] location → %.5f, %.5f", id, pos.lat, pos.lng)
+			return nil
+		}():
+			if *location == "walk" {
+				pos.step(*centerLat, *centerLng)
+				if err := sendLocation(); err != nil {
+					log.Printf("[%s] write error: %v", id, err)
+					return
+				}
+			}
 
 		case msg, ok := <-incoming:
 			if !ok {
@@ -157,10 +171,21 @@ func runDriver(id, pkg, name, token string, wg *sync.WaitGroup) {
 			}
 			switch msg.Type {
 			case cmdTripRequest:
-				log.Printf("[%s] received trip request — auto-accepting", id)
-				accept, _ := json.Marshal(wsMessage{Type: cmdTripAccept, Data: msg.Data})
-				if err := conn.WriteMessage(websocket.TextMessage, accept); err != nil {
-					log.Printf("[%s] accept write error: %v", id, err)
+				switch *response {
+				case "accept":
+					log.Printf("[%s] received trip request — auto-accepting", id)
+					accept, _ := json.Marshal(wsMessage{Type: cmdTripAccept, Data: msg.Data})
+					if err := conn.WriteMessage(websocket.TextMessage, accept); err != nil {
+						log.Printf("[%s] accept write error: %v", id, err)
+					}
+				case "decline":
+					log.Printf("[%s] received trip request — auto-declining", id)
+					decline, _ := json.Marshal(wsMessage{Type: cmdTripDecline, Data: msg.Data})
+					if err := conn.WriteMessage(websocket.TextMessage, decline); err != nil {
+						log.Printf("[%s] decline write error: %v", id, err)
+					}
+				default:
+					log.Printf("[%s] received trip request — no auto response (response=%s)", id, *response)
 				}
 			default:
 				log.Printf("[%s] server msg: %s", id, msg.Type)
@@ -173,6 +198,12 @@ func runDriver(id, pkg, name, token string, wg *sync.WaitGroup) {
 
 func main() {
 	flag.Parse()
+	if *response != "none" && *response != "accept" && *response != "decline" {
+		log.Fatalf("invalid -response value %q; expected one of: none, accept, decline", *response)
+	}
+	if *location != "none" && *location != "static" && *location != "walk" {
+		log.Fatalf("invalid -location value %q; expected one of: none, static, walk", *location)
+	}
 	packages := strings.Split(*packagesCSV, ",")
 
 	var wg sync.WaitGroup

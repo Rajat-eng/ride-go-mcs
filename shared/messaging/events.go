@@ -7,6 +7,7 @@ import (
 
 const (
 	FindAvailableDriversQueue        = "find_available_drivers"         // when trip is created then driver service consumes event to find available drivers
+	NotifyTripCreatedQueue           = "notify_trip_created"            // forwards trip.event.created to rider ws so UI can show searching state
 	DriverCmdTripRequestQueue        = "driver_cmd_trip_request"        // send notification to driver found and ask to accept/reject--> eevent counsumed by api gateway and send to driver usnd web socket
 	DriverTripResponseQueue          = "driver_trip_response"           // on getting response from driver the event is publichsed and send to rider
 	NotifyDriverNoDriversFoundQueue  = "notify_driver_no_drivers_found" // on no drivers found event is sent to rider using ws and again event is published for
@@ -15,8 +16,8 @@ const (
 	NotifyPaymentSessionCreatedQueue = "notify_payment_session_created"
 	NotifyPaymentSuccessQueue        = "payment_success"
 	DeadLetterQueue                  = "dead_letter_queue"
-	DriverLocationUpdateQueue        = "driver_location_update" // driver location updates published by api-gateway, consumed by driver-service
-	DriverTripAssignedQueue          = "driver_trip_assigned"   // driver service stores driverID→riderID mapping when trip is accepted
+	DriverLocationUpdateQueue        = "driver_location_update"       // driver location updates published by api-gateway, consumed by driver-service
+	DriverTripAssignedQueue          = "driver_trip_assigned"         // driver service stores driverID→riderID mapping when trip is accepted
 	NotifyRiderDriverLocationQueue   = "notify_rider_driver_location" // driver service publishes real-time location to rider via api-gateway
 )
 
@@ -27,7 +28,7 @@ type TripEventData struct {
 }
 
 type DriverTripResponseData struct {
-	Driver      *pbd.Driver `json:"driver"`  // kept for backward compat but may be nil
+	Driver      *pbd.Driver `json:"driver"` // kept for backward compat but may be nil
 	TripID      string      `json:"tripID"`
 	RiderID     string      `json:"riderID"`
 	DriverID    string      `json:"driverID"`

@@ -51,6 +51,7 @@ export interface TripPreview {
     tripID: string,
     route: [number, number][],
     rideFares: RouteFare[],
+    selectedFare?: RouteFare,
     duration: number,
     distance: number,
 }

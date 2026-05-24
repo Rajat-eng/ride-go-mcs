@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { WEBSOCKET_URL } from "../constants";
 import { CarPackageSlug } from '../types';
-import { ServerWsMessage, TripEvents, isValidWsMessage, isValidTripEvent, ClientWsMessage, BackendEndpoints } from '../contracts';
+import { ServerWsMessage, TripEvents, isValidWsMessage, ClientWsMessage, BackendEndpoints } from '../contracts';
 import { useAppDispatch } from '../store/store';
 import {
   setDriver,
   setRequestedTrip,
   setTripStatus,
+  addChatMessage,
   setError,
 } from '../store/slices/driverSlice';
 
@@ -48,16 +49,18 @@ export const useDriverStreamConnection = ({
         case TripEvents.DriverTripRequest:
           const trip = (message.data?.trip) ?? message.data;
           dispatch(setRequestedTrip(trip));
+          dispatch(setTripStatus(message.type));
+          // Subscribe to the trip topic so subsequent scoped events (chat, location) are delivered.
+          if (trip?.id) {
+            websocket.send(JSON.stringify({ type: TripEvents.WsTopicSubscribe, data: { topic: `trip:${trip.id}` } }));
+          }
           break;
         case TripEvents.DriverRegister:
           dispatch(setDriver(message.data));
           break;
-      }
-
-      if (isValidTripEvent(message.type)) {
-        dispatch(setTripStatus(message.type));
-      } else {
-        dispatch(setError(`Unknown message type "${message.type}", allowed types are: ${Object.values(TripEvents).join(', ')}`));
+        case TripEvents.ChatMessageReceived:
+          dispatch(addChatMessage(message.data));
+          break;
       }
     };
 

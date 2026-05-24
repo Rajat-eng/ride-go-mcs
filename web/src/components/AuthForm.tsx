@@ -95,7 +95,7 @@ export function AuthForm({ role, onSuccess, onBack }: AuthFormProps) {
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
                 required
-                minLength={8}
+                minLength={mode === 'signup' ? 8 : 1}
               />
             </div>
 

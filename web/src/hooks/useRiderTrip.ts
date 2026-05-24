@@ -65,7 +65,7 @@ export function useRiderTrip(userID: string) {
     const data = await startTrip({ rideFareID: fare.id, userID }).unwrap();
 
     if (trip) {
-      dispatch(setTrip({ ...trip, tripID: data.tripID }));
+      dispatch(setTrip({ ...trip, tripID: data.tripID, selectedFare: fare }));
     }
 
     return data;

@@ -83,7 +83,6 @@ func main() {
 
 	// HTTP server for dev tooling (seed endpoint)
 	mux := http.NewServeMux()
-	mux.HandleFunc("/seed", HandleSeedDrivers(svc))
 	go func() {
 		log.Printf("Starting HTTP server on %s", HTTPAddr)
 		if err := http.ListenAndServe(HTTPAddr, mux); err != nil {

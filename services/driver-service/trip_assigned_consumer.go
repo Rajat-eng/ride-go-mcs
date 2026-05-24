@@ -12,6 +12,7 @@ import (
 
 // tripAssignedPayload matches the proto Trip JSON produced by trip.ToProto()
 type tripAssignedPayload struct {
+	ID     string `json:"id"`
 	UserID string `json:"userID"` // riderID
 	Driver struct {
 		ID string `json:"id"` // driverID
@@ -50,8 +51,8 @@ func (c *tripAssignedConsumer) Listen() error {
 			return nil
 		}
 
-		if err := c.service.SetActiveRider(payload.Driver.ID, payload.UserID); err != nil {
-			log.Printf("trip_assigned_consumer: failed to store active rider for driver %s: %v", payload.Driver.ID, err)
+		if err := c.service.SetTripChatPair(payload.ID, payload.UserID, payload.Driver.ID); err != nil {
+			log.Printf("trip_assigned_consumer: failed to store active trip pair for driver %s: %v", payload.Driver.ID, err)
 			return err
 		}
 

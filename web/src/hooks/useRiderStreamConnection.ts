@@ -9,6 +9,7 @@ import {
   setPaymentSession,
   setAssignedDriver,
   setAssignedDriverLocation,
+  addChatMessage,
   setError,
 } from '../store/slices/riderSlice';
 
@@ -48,10 +49,25 @@ export function useRiderStreamConnection(location: Coordinate | null, userID: st
           break;
         case TripEvents.Created:
           dispatch(setTripStatus(message.type));
+          // TripEventCreated data shape is { trip: Trip, pickupLat, pickupLng } — trip ID is nested.
+          // message.data.trip.id is the canonical trip ID at runtime.
+          {
+            const tripID = message.data.trip?.id ?? (message.data as { id?: string }).id;
+            if (tripID) {
+              ws.send(JSON.stringify({ type: TripEvents.WsTopicSubscribe, data: { topic: `trip:${tripID}` } }));
+            }
+          }
           break;
         case TripEvents.NoDriversFound:
           dispatch(setTripStatus(message.type));
           break;
+        case TripEvents.ChatMessageReceived:
+          dispatch(addChatMessage(message.data));
+          break;
+      }
+
+      if (message.type === TripEvents.ChatMessageReceived || message.type === TripEvents.DriverLocation || message.type === TripEvents.DriverEventLocation) {
+        return;
       }
     };
 

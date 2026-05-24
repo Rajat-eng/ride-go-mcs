@@ -46,12 +46,19 @@ func (c *tripConsumer) Listen() error {
 }
 
 func (c *tripConsumer) handleAndNotifyDrivers(ctx context.Context, payload messaging.TripEventData) error {
+	log.Print("consuming trip event created by rider")
 	suitableIDs := c.service.FindAvailableDrivers(payload.Trip.SelectedFare.PackageSlug, payload.PickupLat, payload.PickupLng)
+	marshalledEvent, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
 
 	if len(suitableIDs) == 0 {
 		// 	If no driver → publish TripEventNoDriversFound (not bound to this queue, so goes elsewhere — consumed by user/gateway).
+		log.Printf("No suitable drivers found for rider: %s", payload.Trip.UserID)
 		if err := c.rabbitmq.PublishMessage(ctx, contracts.TripEventNoDriversFound, contracts.AmqpMessage{
 			OwnerID: payload.Trip.UserID,
+			Data:    marshalledEvent,
 		}); err != nil {
 			log.Printf("Failed to publish message to exchange: %v", err)
 			return err
@@ -64,15 +71,12 @@ func (c *tripConsumer) handleAndNotifyDrivers(ctx context.Context, payload messa
 	randomIndex := rand.Intn(len(suitableIDs))
 
 	suitableDriverID := suitableIDs[randomIndex] // For simplicity, pick the first suitable driver
-	marshalledEvent, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
 
 	// If driver found → publish DriverCmdTripRequest (goes to driver-specific consumer/gateway).
 
 	// if rejected by driver then driver service publishes tripNotInterested event to trip exchange after selecting no option
 	// this event will be read by trip_consumer and new driver will be assigned
+
 	if err := c.rabbitmq.PublishMessage(ctx, contracts.DriverCmdTripRequest, contracts.AmqpMessage{
 		OwnerID: suitableDriverID, // recipient of message
 		Data:    marshalledEvent,
@@ -80,6 +84,7 @@ func (c *tripConsumer) handleAndNotifyDrivers(ctx context.Context, payload messa
 		log.Printf("Failed to publish message to exchange: %v", err)
 		return err
 	}
+	log.Printf("published trip request to driver with id: %s", suitableDriverID)
 
 	return nil
 

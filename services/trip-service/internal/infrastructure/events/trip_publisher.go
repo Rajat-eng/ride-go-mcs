@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"ride-sharing/services/trip-service/internal/domain"
 	"ride-sharing/shared/contracts"
 	"ride-sharing/shared/messaging"
@@ -27,8 +28,9 @@ func (p *TripEventPublisher) PublishTripCreated(ctx context.Context, trip *domai
 	if trip.RideFare != nil && trip.RideFare.Route != nil && len(trip.RideFare.Route.Routes) > 0 {
 		coords := trip.RideFare.Route.Routes[0].Geometry.Coordinates
 		if len(coords) > 0 {
-			payload.PickupLat = coords[0][0] // lat
-			payload.PickupLng = coords[0][1] // lng
+			// OSRM geometry coordinates are [longitude, latitude].
+			payload.PickupLng = coords[0][0]
+			payload.PickupLat = coords[0][1]
 		}
 	}
 
@@ -36,7 +38,9 @@ func (p *TripEventPublisher) PublishTripCreated(ctx context.Context, trip *domai
 	if err != nil {
 		return err
 	}
+	log.Printf("Publishing Trip Created event for tripID: %s, userID: %s", trip.ID.Hex(), trip.UserID)
 	return p.rabbitMQ.PublishMessage(ctx, contracts.TripEventCreated, contracts.AmqpMessage{
+		// consumed by driver service to find suitable drivers and notify them of the new trip
 		Data:    tripEventJSON,
 		OwnerID: trip.UserID,
 	})

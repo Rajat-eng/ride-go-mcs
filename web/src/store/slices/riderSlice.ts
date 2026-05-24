@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { Driver, TripPreview } from '../../types';
-import { PaymentEventSessionCreatedData, TripEvents } from '../../contracts';
+import { ChatMessageData, PaymentEventSessionCreatedData, TripEvents } from '../../contracts';
 
 import { Coordinate } from '../../types';
 
@@ -10,6 +10,7 @@ interface RiderState {
   paymentSession: PaymentEventSessionCreatedData | null;
   assignedDriver: Driver | null;
   assignedDriverLocation: Coordinate | null;
+  chatMessages: ChatMessageData[];
   trip: TripPreview | null;
   destination: [number, number] | null;
   error: string | null;
@@ -21,6 +22,7 @@ const initialState: RiderState = {
   paymentSession: null,
   assignedDriver: null,
   assignedDriverLocation: null,
+  chatMessages: [],
   trip: null,
   destination: null,
   error: null,
@@ -51,6 +53,9 @@ const riderSlice = createSlice({
     setAssignedDriverLocation(state, action: PayloadAction<Coordinate | null>) {
       state.assignedDriverLocation = action.payload;
     },
+    addChatMessage(state, action: PayloadAction<ChatMessageData>) {
+      state.chatMessages.push(action.payload);
+    },
     setError(state, action: PayloadAction<string | null>) {
       state.error = action.payload;
     },
@@ -61,6 +66,7 @@ const riderSlice = createSlice({
       state.destination = null;
       state.assignedDriver = null;
       state.assignedDriverLocation = null;
+      state.chatMessages = [];
     },
   },
 });
@@ -71,6 +77,7 @@ export const {
   setPaymentSession,
   setAssignedDriver,
   setAssignedDriverLocation,
+  addChatMessage,
   setTrip,
   setDestination,
   setError,

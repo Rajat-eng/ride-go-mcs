@@ -10,6 +10,8 @@ import { RoutingControl } from "./RoutingControl";
 import { DriverCard } from "./DriverCard";
 import { useDriverTrip } from "../hooks/useDriverTrip";
 import { UserInfo } from './UserInfo';
+import { TripEvents } from '../contracts';
+import { useAppSelector } from '../store/store';
 
 const driverMarker = new L.Icon({
   iconUrl: "https://www.svgrepo.com/show/25407/car.svg",
@@ -31,9 +33,11 @@ const destinationMarker = new L.Icon({
 
 export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
   const mapRef = useRef<L.Map>(null);
+  const chatMessages = useAppSelector((s) => s.driver.chatMessages);
 
   const {
     userID,
+    sendMessage,
     driver,
     tripStatus,
     requestedTrip,
@@ -47,6 +51,7 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
     handleMapClick,
     handleAcceptTrip,
     handleDeclineTrip,
+    handleCancelTrip,
   } = useDriverTrip(packageSlug);
 
   if (error) {
@@ -56,6 +61,17 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
   if (!locationReady) {
     return <div>Waiting for location...</div>
   }
+
+  const handleSendChatMessage = (tripID: string, text: string) => {
+    sendMessage({
+      type: TripEvents.ChatMessageSend,
+      data: {
+        tripID,
+        text,
+        messageID: crypto.randomUUID(),
+      },
+    });
+  };
 
   return (
     <div className="relative flex flex-col md:flex-row h-screen">
@@ -112,8 +128,12 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
           <DriverTripOverview
             trip={requestedTrip}
             status={tripStatus}
+            userID={userID}
+            chatMessages={chatMessages}
+            onSendChatMessage={handleSendChatMessage}
             onAcceptTrip={handleAcceptTrip}
             onDeclineTrip={handleDeclineTrip}
+            onCancelTrip={handleCancelTrip}
           />
         </div>
       </div>

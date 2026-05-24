@@ -8,12 +8,26 @@ import { TripOverviewCard } from "./TripOverviewCard"
 import { StripePaymentButton } from "./StripePaymentButton"
 import { DriverCard } from "./DriverCard"
 import { TripEvents, PaymentEventSessionCreatedData } from "../contracts"
+import { TripChatPanel } from "./TripChatPanel";
+import { ChatMessageData } from "../contracts";
+import { PackagesMeta } from "./PackagesMeta";
+
+const getRouteEndpoints = (trip: TripPreview | null) => {
+  const coordinates = trip?.route ?? [];
+  return {
+    start: coordinates[0],
+    destination: coordinates[coordinates.length - 1],
+  };
+};
 
 interface TripOverviewProps {
   trip: TripPreview | null;
   status: TripEvents | null;
   assignedDriver?: Driver | null;
   paymentSession?: PaymentEventSessionCreatedData | null;
+  userID: string;
+  chatMessages: ChatMessageData[];
+  onSendChatMessage: (tripID: string, text: string) => void;
   onPackageSelect: (carPackage: RouteFare) => void;
   onCancel: () => void;
 }
@@ -23,9 +37,14 @@ export const RiderTripOverview = ({
   status,
   assignedDriver,
   paymentSession,
+  userID,
+  chatMessages,
+  onSendChatMessage,
   onPackageSelect,
   onCancel,
 }: TripOverviewProps) => {
+  const { start, destination } = getRouteEndpoints(trip);
+
   if (!trip) {
     return (
       <TripOverviewCard
@@ -47,7 +66,27 @@ export const RiderTripOverview = ({
           <div className="text-sm text-gray-500">
             <p>Amount: {paymentSession.amount} {paymentSession.currency}</p>
             <p>Trip ID: {paymentSession.tripID}</p>
+            {trip?.selectedFare?.packageSlug && (
+              <p>Selected package: {PackagesMeta[trip.selectedFare.packageSlug].name} ({trip.selectedFare.packageSlug})</p>
+            )}
+            <p>Distance: {convertMetersToKilometers(trip?.distance ?? 0)}</p>
+            <p>Estimated time: {convertSecondsToMinutes(trip?.duration ?? 0)} to destination</p>
+            {start && destination && (
+              <p>
+                Start: {start[1].toFixed(5)}, {start[0].toFixed(5)}
+                <br />
+                Destination: {destination[1].toFixed(5)}, {destination[0].toFixed(5)}
+              </p>
+            )}
           </div>
+          <TripChatPanel
+            title="Chat with your driver"
+            tripID={paymentSession.tripID}
+            currentUserID={userID}
+            peerLabel={assignedDriver?.name ?? 'Driver'}
+            messages={chatMessages}
+            onSend={(text) => onSendChatMessage(paymentSession.tripID, text)}
+          />
           <StripePaymentButton paymentSession={paymentSession} />
         </div>
       </TripOverviewCard>
@@ -73,9 +112,36 @@ export const RiderTripOverview = ({
         title="Driver assigned!"
         description="Your driver is on the way, waiting for payment confirmation to show..."
       >
-        <div className="flex flex-col space-y-3 justify-center items-center mb-4">
-          {/* <p>Driver: {trip.id}</p> */}
+        <div className="flex flex-col gap-4 mb-4">
+          <DriverCard driver={assignedDriver} />
+          <div className="flex flex-col gap-1 text-sm text-gray-600">
+            <p>Trip ID: {trip.tripID}</p>
+            {trip?.selectedFare?.packageSlug && (
+              <p>Selected package: {PackagesMeta[trip.selectedFare.packageSlug].name} ({trip.selectedFare.packageSlug})</p>
+            )}
+            {trip?.duration && (
+              <p>Estimated time: {convertSecondsToMinutes(trip.duration)} to destination</p>
+            )}
+            <p>Distance: {convertMetersToKilometers(trip?.distance ?? 0)}</p>
+            {start && destination && (
+              <p>
+                Start: {start[1].toFixed(5)}, {start[0].toFixed(5)}
+                <br />
+                Destination: {destination[1].toFixed(5)}, {destination[0].toFixed(5)}
+              </p>
+            )}
+          </div>
         </div>
+        {trip?.tripID && (
+          <TripChatPanel
+            title="Chat with your driver"
+            tripID={trip.tripID}
+            currentUserID={userID}
+            peerLabel={assignedDriver?.name ?? 'Driver'}
+            messages={chatMessages}
+            onSend={(text) => onSendChatMessage(trip.tripID, text)}
+          />
+        )}
         <Button variant="destructive" className="w-full" onClick={onCancel}>
           Cancel current trip
         </Button>
@@ -124,9 +190,10 @@ export const RiderTripOverview = ({
         </div>
 
         <div className="flex flex-col items-center justify-center gap-2">
-          {trip?.duration &&
-            <h3 className="text-sm font-medium text-gray-700 mb-2">Arriving in: {convertSecondsToMinutes(trip?.duration)} at your destination ({convertMetersToKilometers(trip?.distance ?? 0)})</h3>
-          }
+          {trip?.selectedFare?.packageSlug && (
+            <h3 className="text-sm font-medium text-gray-700 mb-2">Selected package: {PackagesMeta[trip.selectedFare.packageSlug].name} ({trip.selectedFare.packageSlug})</h3>
+          )}
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Distance: {convertMetersToKilometers(trip?.distance ?? 0)}</h3>
 
           <Button variant="destructive" className="w-full" onClick={onCancel}>
             Cancel

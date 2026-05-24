@@ -20,24 +20,44 @@ export enum TripEvents {
   DriverTripAccept = "driver.cmd.trip_accept",
   DriverTripDecline = "driver.cmd.trip_decline",
   DriverRegister = "driver.cmd.register",
-  DriverLocationUpdate = "driver.cmd.location_update",
   DriverEventLocation = "driver.event.location",
   PaymentSessionCreated = "payment.event.session_created",
+  ChatMessageSend = "chat.message.send",
+  ChatMessageReceived = "chat.message.received",
+  WsTopicSubscribe = "ws.topic.subscribe",
+  WsTopicUnsubscribe = "ws.topic.unsubscribe",
 }
 
-// Messages sent from the server to the client via the websocket
-export type ServerWsMessage =
+// Every server message may carry an optional topic for client-side filtering.
+export type ServerWsMessage = (
   | PaymentSessionCreatedRequest
   | DriverAssignedRequest
   | DriverLocationRequest
   | DriverEventLocationRequest
+  | ChatMessageReceivedRequest
   | DriverTripRequest
   | DriverRegisterRequest
   | TripCreatedRequest
-  | NoDriversFoundRequest;
+  | NoDriversFoundRequest
+) & { topic?: string };
 
 // Messages sent from the client to the server via the websocket
-export type ClientWsMessage = DriverResponseToTripResponse | DriverLocationUpdateMessage
+export type ClientWsMessage =
+  | DriverResponseToTripResponse
+  | DriverLocationMessage
+  | ChatMessageSendRequest
+  | WsTopicSubscribeMessage
+  | WsTopicUnsubscribeMessage
+
+export interface WsTopicSubscribeMessage {
+  type: TripEvents.WsTopicSubscribe;
+  data: { topic: string };
+}
+
+export interface WsTopicUnsubscribeMessage {
+  type: TripEvents.WsTopicUnsubscribe;
+  data: { topic: string };
+}
 
 interface TripCreatedRequest {
   type: TripEvents.Created;
@@ -84,17 +104,38 @@ interface DriverEventLocationRequest {
   data: Coordinate;
 }
 
+export interface ChatMessageData {
+  tripID: string;
+  senderID: string;
+  text: string;
+  sentAt: number;
+  messageID?: string;
+}
+
+interface ChatMessageReceivedRequest {
+  type: TripEvents.ChatMessageReceived;
+  data: ChatMessageData;
+}
+
+interface ChatMessageSendRequest {
+  type: TripEvents.ChatMessageSend;
+  data: {
+    tripID: string;
+    text: string;
+    messageID?: string;
+  };
+}
+
 interface DriverResponseToTripResponse {
   type: TripEvents.DriverTripAccept | TripEvents.DriverTripDecline;
   data: {
     tripID: string;
     riderID: string;
-    driver: Driver;
   };
 }
 
-interface DriverLocationUpdateMessage {
-  type: TripEvents.DriverLocationUpdate;
+interface DriverLocationMessage {
+  type: TripEvents.DriverLocation;
   data: {
     location: Coordinate;
     geohash: string;

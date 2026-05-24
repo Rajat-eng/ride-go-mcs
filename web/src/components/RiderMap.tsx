@@ -13,6 +13,7 @@ import { useAppSelector } from '../store/store';
 import { useRiderTrip } from '../hooks/useRiderTrip';
 import { UserInfo } from './UserInfo';
 import { Coordinate } from '../types';
+import { TripEvents } from '../contracts';
 
 const userMarker = new L.Icon({
     iconUrl: "https://upload.wikimedia.org/wikipedia/commons/thumb/e/ed/Map_pin_icon.svg/176px-Map_pin_icon.svg.png",
@@ -54,9 +55,9 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
         );
     }, []);
 
-    useRiderStreamConnection(location, userID, accessToken);
+    const { sendMessage } = useRiderStreamConnection(location, userID, accessToken);
 
-    const { drivers, error, tripStatus, assignedDriver, paymentSession } = useAppSelector((s) => s.rider);
+    const { drivers, error, tripStatus, assignedDriver, paymentSession, chatMessages } = useAppSelector((s) => s.rider);
     const { trip, destination, handleMapClick, handleStartTrip, handleCancelTrip } = useRiderTrip(userID);
 
     const onMapClick = async (e: L.LeafletMouseEvent) => {
@@ -75,6 +76,27 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
     if (error) {
         return <div>Error: {error}</div>
     }
+
+    const handleSendChatMessage = (tripID: string, text: string) => {
+        sendMessage({
+            type: TripEvents.ChatMessageSend,
+            data: {
+                tripID,
+                text,
+                messageID: crypto.randomUUID(),
+            },
+        });
+    };
+
+    const handleCancelTripWithUnsubscribe = () => {
+        if (trip?.tripID) {
+            sendMessage({
+                type: TripEvents.WsTopicUnsubscribe,
+                data: { topic: `trip:${trip.tripID}` },
+            });
+        }
+        handleCancelTrip();
+    };
 
     return (
         <div className="relative flex flex-col md:flex-row h-screen">
@@ -149,8 +171,11 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
                     assignedDriver={assignedDriver}
                     status={tripStatus}
                     paymentSession={paymentSession}
+                    userID={userID}
+                    chatMessages={chatMessages}
+                    onSendChatMessage={handleSendChatMessage}
                     onPackageSelect={handleStartTrip}
-                    onCancel={handleCancelTrip}
+                    onCancel={handleCancelTripWithUnsubscribe}
                 />
             </div>
         </div>
