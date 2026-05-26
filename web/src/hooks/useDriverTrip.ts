@@ -4,6 +4,7 @@ import {
   setTripStatus,
   resetTrip,
 } from '../store/slices/driverSlice';
+import { addError } from '../store/slices/uiSlice';
 import { CarPackageSlug, Coordinate } from '../types';
 import { TripEvents } from '../contracts';
 import { useDriverStreamConnection } from './useDriverStreamConnection';
@@ -31,23 +32,26 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
   // Switch to watchPosition so location updates continuously.
   // Each new position: update the UI marker AND push to the backend over WS.
   useEffect(() => {
-    if (!navigator.geolocation) return;
-    const watchId = navigator.geolocation.watchPosition((pos) => {
-      const coord: Coordinate = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-      setDriverLocation(coord);
-      setLocationReady(true);
-      const gh = Geohash.encode(coord.latitude, coord.longitude, 7);
-      sendMessage({
-        type: TripEvents.DriverLocation,
-        data: { location: coord, geohash: gh },
-      });
-    });
+    if (!navigator.geolocation) {
+      return;
+    }
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const coord: Coordinate = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+        setDriverLocation(coord);
+        setLocationReady(true);
+        const gh = Geohash.encode(coord.latitude, coord.longitude, 7);
+        sendMessage({
+          type: TripEvents.DriverLocation,
+          data: { location: coord, geohash: gh },
+        });
+      },
+      () => {
+        dispatch(addError({ message: 'Unable to retrieve your location. Please allow location access.', timestamp: Date.now() }));
+      },
+    );
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [sendMessage]);
-
-  const handleMapClick = useCallback((latlng: { lat: number; lng: number }) => {
-    setDriverLocation({ latitude: latlng.lat, longitude: latlng.lng });
-  }, []);
+  }, [sendMessage, dispatch]);
 
   const handleAcceptTrip = useCallback(() => {
     if (!requestedTrip || !requestedTrip.id) {
@@ -84,6 +88,10 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
       type: TripEvents.WsTopicUnsubscribe,
       data: { topic: `trip:${requestedTrip.id}` },
     });
+    sendMessage({
+      type: TripEvents.WsTopicUnsubscribe,
+      data: { topic: `trip:${requestedTrip.id}:chat` },
+    });
 
     dispatch(setTripStatus(TripEvents.DriverTripDecline));
     dispatch(resetTrip());
@@ -106,6 +114,10 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
     sendMessage({
       type: TripEvents.WsTopicUnsubscribe,
       data: { topic: `trip:${requestedTrip.id}` },
+    });
+    sendMessage({
+      type: TripEvents.WsTopicUnsubscribe,
+      data: { topic: `trip:${requestedTrip.id}:chat` },
     });
 
     dispatch(resetTrip());
@@ -146,7 +158,6 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
     parsedRoute,
     routeDestination,
     routeStart,
-    handleMapClick,
     handleAcceptTrip,
     handleDeclineTrip,
     handleCancelTrip,

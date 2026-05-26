@@ -1,9 +1,9 @@
 import { useCallback, useRef } from 'react';
 import { useAppDispatch, useAppSelector } from '../store/store';
-import { setTrip, setDestination, resetTrip } from '../store/slices/riderSlice';
+import { setTrip, setDestination, resetTrip, setTripStatus } from '../store/slices/riderSlice';
 import { RouteFare } from '../types';
-import { HTTPTripPreviewRequestPayload } from '../contracts';
-import { usePreviewTripMutation, useStartTripMutation } from '../store/api/tripApi';
+import { HTTPTripPreviewRequestPayload, TripEvents } from '../contracts';
+import { usePreviewTripMutation, useStartTripMutation, useCancelTripMutation } from '../store/api/tripApi';
 
 export function useRiderTrip(userID: string) {
   const dispatch = useAppDispatch();
@@ -12,6 +12,7 @@ export function useRiderTrip(userID: string) {
 
   const [previewTrip] = usePreviewTripMutation();
   const [startTrip] = useStartTripMutation();
+  const [cancelTrip] = useCancelTripMutation();
 
   const handleMapClick = useCallback(async (
     latlng: { lat: number; lng: number },
@@ -67,13 +68,22 @@ export function useRiderTrip(userID: string) {
     if (trip) {
       dispatch(setTrip({ ...trip, tripID: data.tripID, selectedFare: fare }));
     }
+    dispatch(setTripStatus(TripEvents.Created));
 
     return data;
   }, [userID, trip, dispatch, startTrip]);
 
-  const handleCancelTrip = useCallback(() => {
+  const handleCancelTrip = useCallback(async () => {
+    const tripID = trip?.tripID;
+    if (tripID) {
+      try {
+        await cancelTrip({ tripID }).unwrap();
+      } catch {
+        // Even if the server call fails (e.g. trip already cancelled), reset local state.
+      }
+    }
     dispatch(resetTrip());
-  }, [dispatch]);
+  }, [trip?.tripID, cancelTrip, dispatch]);
 
   return {
     trip,

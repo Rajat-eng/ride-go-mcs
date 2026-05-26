@@ -33,8 +33,8 @@ func (s *Service) UpdateDriverLocation(driverId, packageSlug string, lat, lng fl
 }
 
 // RemoveDriverFromGeo removes the driver from the GEO index so they no longer receive trip requests.
-func (s *Service) RemoveDriverFromGeo(driverId, packageSlug string) {
-	s.rdb.ZRem(context.Background(), driverGeoKeyPrefix+packageSlug, driverId)
+func (s *Service) RemoveDriverFromGeo(ctx context.Context, driverId, packageSlug string) {
+	s.rdb.ZRem(ctx, driverGeoKeyPrefix+packageSlug, driverId)
 }
 
 // FindAvailableDrivers returns driver IDs near pickupLat/Lng matching packageType.

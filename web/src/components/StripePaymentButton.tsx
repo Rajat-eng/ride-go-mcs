@@ -8,13 +8,19 @@ interface StripePaymentButtonProps {
 }
 
 // Initialize Stripe
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!)
+const stripePublicKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+const stripePromise = stripePublicKey ? loadStripe(stripePublicKey) : null
 
 export const StripePaymentButton = ({
   paymentSession,
   isLoading = false,
 }: StripePaymentButtonProps) => {
   const handlePayment = async () => {
+    if (!stripePromise) {
+      console.error("Missing NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY")
+      return
+    }
+
     const stripe = await stripePromise
 
     if (!stripe) {
@@ -30,13 +36,13 @@ export const StripePaymentButton = ({
     }
   }
 
-  if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
+  if (!stripePublicKey) {
     return (
       <Button
         disabled
         className="w-full bg-red-500 text-white"
       >
-        Stripe API KEY is not set on the NEXTJS app
+        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set
       </Button>
     )
   }

@@ -34,7 +34,12 @@ spec:
         - name: GATEWAY_URL
           value: "http://api-gateway:8081"
         - name: NEXT_PUBLIC_WEBSOCKET_URL
-          value: "ws://api-gateway:8081/ws"
+          value: "ws://ws-gateway:8082/ws"
+        - name: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: stripe-secrets
+              key: stripe-publishable-key
         - name: NEXTAUTH_URL
           valueFrom:
             configMapKeyRef:

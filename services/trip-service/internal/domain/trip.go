@@ -46,4 +46,5 @@ type TripService interface {
 	GetAndValidateFare(ctx context.Context, fareID, userID string) (*RideFareModel, error)
 	GetTripByID(ctx context.Context, id string) (*TripModel, error)
 	UpdateTrip(ctx context.Context, tripID string, status string, driver *pb.TripDriver) error
+	CancelTrip(ctx context.Context, tripID, requesterUserID string) (*TripModel, error)
 }

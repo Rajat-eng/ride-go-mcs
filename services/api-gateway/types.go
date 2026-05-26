@@ -35,3 +35,14 @@ func (s *StartTripRequest) toProto(userID string) *pb.CreateTripRequest {
 		RideFareID: s.RideFare,
 	}
 }
+
+type CancelTripRequest struct {
+	TripID string `json:"tripID" validate:"required,min=1"`
+}
+
+func (c *CancelTripRequest) toProto(userID string) *pb.CancelTripRequest {
+	return &pb.CancelTripRequest{
+		TripID: c.TripID,
+		UserID: userID,
+	}
+}

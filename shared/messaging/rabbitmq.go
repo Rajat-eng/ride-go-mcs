@@ -8,6 +8,8 @@ import (
 	"ride-sharing/shared/contracts"
 	"ride-sharing/shared/retry"
 	"ride-sharing/shared/tracing"
+	"strings"
+	"sync"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -21,6 +23,8 @@ const (
 type RabbitMQ struct {
 	conn    *amqp.Connection
 	Channel *amqp.Channel
+	uri     string
+	mu      sync.Mutex
 }
 
 func NewRabbitMQ(uri string) (*RabbitMQ, error) {
@@ -38,6 +42,7 @@ func NewRabbitMQ(uri string) (*RabbitMQ, error) {
 	rmq := &RabbitMQ{
 		conn:    conn,
 		Channel: ch,
+		uri:     uri,
 	}
 
 	if err := rmq.setupExchangesAndQueues(); err != nil {
@@ -52,9 +57,6 @@ func NewRabbitMQ(uri string) (*RabbitMQ, error) {
 type MessageHandler func(context.Context, amqp.Delivery) error
 
 func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) error {
-	// Set prefetch count to 1 for fair dispatch
-	// This tells RabbitMQ not to give more than one message to a service at a time.
-	// The worker will only get the next message after it has acknowledged the previous one.
 	err := r.Channel.Qos(
 		1,     // prefetchCount: Limit to 1 unacknowledged message per consumer
 		0,     // prefetchSize: No specific limit on message size
@@ -137,14 +139,63 @@ func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, messag
 	return tracing.TracedPublisher(ctx, TripExchange, routingKey, msg, r.publish)
 }
 
+func (r *RabbitMQ) reconnect() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	// If the channel is still usable, nothing to do.
+	if r.Channel != nil && !r.conn.IsClosed() {
+		if ch, err := r.conn.Channel(); err == nil {
+			r.Channel = ch
+			if err := r.setupExchangesAndQueues(); err == nil {
+				return nil
+			}
+		}
+	}
+
+	// Full reconnect.
+	conn, err := amqp.Dial(r.uri)
+	if err != nil {
+		return fmt.Errorf("rabbitmq reconnect dial: %w", err)
+	}
+	ch, err := conn.Channel()
+	if err != nil {
+		conn.Close()
+		return fmt.Errorf("rabbitmq reconnect channel: %w", err)
+	}
+	if r.conn != nil {
+		r.conn.Close()
+	}
+	r.conn = conn
+	r.Channel = ch
+	if err := r.setupExchangesAndQueues(); err != nil {
+		return fmt.Errorf("rabbitmq reconnect setup: %w", err)
+	}
+	log.Println("RabbitMQ reconnected successfully")
+	return nil
+}
+
 func (r *RabbitMQ) publish(ctx context.Context, exchange, routingKey string, msg amqp.Publishing) error {
-	return r.Channel.PublishWithContext(ctx,
-		exchange,   // exchange
-		routingKey, // routing key
-		false,      // mandatory
-		false,      // immediate
+	err := r.Channel.PublishWithContext(ctx,
+		exchange,
+		routingKey,
+		false,
+		false,
 		msg,
 	)
+	if err == nil {
+		return nil
+	}
+	// Channel/connection is dead — reconnect and retry once.
+	if strings.Contains(err.Error(), "channel/connection is not open") ||
+		strings.Contains(err.Error(), "Exception (504)") {
+		log.Printf("RabbitMQ channel lost (%v) — reconnecting", err)
+		if reconnErr := r.reconnect(); reconnErr != nil {
+			return fmt.Errorf("publish failed and reconnect failed: %w", reconnErr)
+		}
+		return r.Channel.PublishWithContext(ctx, exchange, routingKey, false, false, msg)
+	}
+	return err
 }
 
 func (r *RabbitMQ) setupDeadLetterExchange() error {
@@ -302,6 +353,30 @@ func (r *RabbitMQ) setupExchangesAndQueues() error {
 	if err := r.declareAndBindQueue(
 		NotifyRiderDriverLocationQueue,
 		[]string{contracts.DriverEventLocation},
+		TripExchange,
+	); err != nil {
+		return err
+	}
+
+	if err := r.declareAndBindQueue(
+		ChatCmdSendQueue,
+		[]string{contracts.ChatCmdSend},
+		TripExchange,
+	); err != nil {
+		return err
+	}
+
+	if err := r.declareAndBindQueue(
+		ChatEventDeliveredQueue,
+		[]string{contracts.ChatEventDelivered},
+		TripExchange,
+	); err != nil {
+		return err
+	}
+
+	if err := r.declareAndBindQueue(
+		NotifyTripCancelledQueue,
+		[]string{contracts.TripEventCancelled},
 		TripExchange,
 	); err != nil {
 		return err

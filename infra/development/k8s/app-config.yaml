@@ -10,4 +10,6 @@ data:
   STRIPE_SUCCESS_URL: "http://localhost:3000?payment=success"
   STRIPE_CANCEL_URL: "http://localhost:3000?payment=cancel"
   REDIS_URI: "redis:6379"
+  DRIVER_SERVICE_URL: "driver-service:50052"
+  ALLOWED_ORIGINS: "http://localhost:3000"
   

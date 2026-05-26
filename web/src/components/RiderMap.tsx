@@ -55,9 +55,9 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
         );
     }, []);
 
-    const { sendMessage } = useRiderStreamConnection(location, userID, accessToken);
+    const { sendMessage } = useRiderStreamConnection(userID, accessToken);
 
-    const { drivers, error, tripStatus, assignedDriver, paymentSession, chatMessages } = useAppSelector((s) => s.rider);
+    const { drivers, tripStatus, assignedDriver, paymentSession, chatMessages } = useAppSelector((s) => s.rider);
     const { trip, destination, handleMapClick, handleStartTrip, handleCancelTrip } = useRiderTrip(userID);
 
     const onMapClick = async (e: L.LeafletMouseEvent) => {
@@ -66,15 +66,11 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
     };
 
     if (locationError) {
-        return <div>Location error: {locationError}</div>
+        return <div className="flex items-center justify-center h-screen text-red-500">{locationError}</div>;
     }
 
     if (!location) {
-        return <div>Waiting for location...</div>
-    }
-
-    if (error) {
-        return <div>Error: {error}</div>
+        return <div>Waiting for location...</div>;
     }
 
     const handleSendChatMessage = (tripID: string, text: string) => {
@@ -89,12 +85,6 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
     };
 
     const handleCancelTripWithUnsubscribe = () => {
-        if (trip?.tripID) {
-            sendMessage({
-                type: TripEvents.WsTopicUnsubscribe,
-                data: { topic: `trip:${trip.tripID}` },
-            });
-        }
         handleCancelTrip();
     };
 

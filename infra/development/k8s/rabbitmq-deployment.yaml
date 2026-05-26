@@ -1,3 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rabbitmq-config
+data:
+  enabled_plugins: |
+    [rabbitmq_management,rabbitmq_prometheus].
+
+---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -15,10 +24,11 @@ spec:
     spec:
       containers:
         - name: rabbitmq
-          image: rabbitmq:3-management
+          image: rabbitmq:4-management
           ports:
-            - containerPort: 5672 # AMQP port
+            - containerPort: 5672  # AMQP port
             - containerPort: 15672 # Management UI port
+            - containerPort: 15692 # Prometheus metrics port
           readinessProbe: #recireve traf 
             exec:
               command: ["rabbitmq-diagnostics", "ping"]
@@ -28,10 +38,10 @@ spec:
             failureThreshold: 5
           livenessProbe: # restasrts the pod if RabbitMQ is not running
             exec:
-              command: ["rabbitmq-diagnostics", "check_running"]
+              command: ["rabbitmq-diagnostics", "ping"]
             initialDelaySeconds: 120
             periodSeconds: 30
-            timeoutSeconds: 30
+            timeoutSeconds: 10
             failureThreshold: 5
           resources:
             requests:
@@ -56,6 +66,18 @@ spec:
           volumeMounts:
             - name: rabbitmq-data
               mountPath: /var/lib/rabbitmq
+            - name: rabbitmq-config
+              mountPath: /etc/rabbitmq/rabbitmq.conf
+              subPath: rabbitmq.conf
+              readOnly: true
+            - name: rabbitmq-config
+              mountPath: /etc/rabbitmq/enabled_plugins
+              subPath: enabled_plugins
+              readOnly: true
+      volumes:
+        - name: rabbitmq-config
+          configMap:
+            name: rabbitmq-config
   volumeClaimTemplates: # claim bind to this pod for data persistence for each replica
     - metadata:
         name: rabbitmq-data
@@ -80,4 +102,7 @@ spec:
     - name: management
       port: 15672
       targetPort: 15672
+    - name: prometheus
+      port: 15692
+      targetPort: 15692
   type: ClusterIP

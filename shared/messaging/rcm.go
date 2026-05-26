@@ -21,178 +21,254 @@ var (
 	ErrTripChatUnauthorized = errors.New("sender is not part of trip chat pair")
 )
 
+// RedisConnectionManager manages WebSocket connections across multiple gateway
+// nodes using Redis Pub/Sub for cross-node message delivery.
+//
+// Room model (for chat):
+//   - Each WebSocket connection has a unique socketID.
+//   - Sockets may join named rooms (e.g. "trip:{id}:chat").
+//   - Room messages are fanned out to all sockets in the room across all nodes
+//     by publishing to the "room:{roomID}" Redis channel.
+//
+// User-direct model (for system/trip/payment events):
+//   - Each user has a dedicated "user:{userID}:events" Redis channel.
+//   - All sockets of the same user on this node receive the message.
 type RedisConnectionManager struct {
-	localCM      *ConnectionManager
-	rdb          *redis.Client
-	ctx          context.Context
-	subs         map[string]*redis.PubSub
-	topicsByUser map[string]map[string]struct{} // userID → set of subscribed topics
-	mu           sync.Mutex
+	localCM     *ConnectionManager
+	rdb         *redis.Client
+	ctx         context.Context
+	userSubs    map[string]*redis.PubSub       // userID  → user-direct channel sub
+	roomSubs    map[string]*redis.PubSub       // roomID  → room broadcast sub
+	socketRooms map[string]map[string]struct{} // socketID → set of roomIDs
+	roomSockets map[string]map[string]struct{} // roomID   → set of local socketIDs
+	mu          sync.Mutex
 }
 
 func NewRedisConnectionManager(rdb *redis.Client) *RedisConnectionManager {
 	return &RedisConnectionManager{
-		localCM:      NewConnectionManager(),
-		rdb:          rdb,
-		ctx:          context.Background(),
-		subs:         make(map[string]*redis.PubSub),
-		topicsByUser: make(map[string]map[string]struct{}),
+		localCM:     NewConnectionManager(),
+		rdb:         rdb,
+		ctx:         context.Background(),
+		userSubs:    make(map[string]*redis.PubSub),
+		roomSubs:    make(map[string]*redis.PubSub),
+		socketRooms: make(map[string]map[string]struct{}),
+		roomSockets: make(map[string]map[string]struct{}),
 	}
 }
 
-// SubscribeTopic registers interest in a topic for a connected user.
-// Messages tagged with this topic will be delivered to the user's WS connection.
-func (rcm *RedisConnectionManager) SubscribeTopic(userID, topic string) {
-	rcm.mu.Lock()
-	defer rcm.mu.Unlock()
-	if _, ok := rcm.topicsByUser[userID]; !ok {
-		rcm.topicsByUser[userID] = make(map[string]struct{})
-	}
-	rcm.topicsByUser[userID][topic] = struct{}{}
-	log.Printf("User %s subscribed to topic %s", userID, topic)
-}
-
-// UnsubscribeTopic removes interest in a topic for a user.
-func (rcm *RedisConnectionManager) UnsubscribeTopic(userID, topic string) {
-	rcm.mu.Lock()
-	defer rcm.mu.Unlock()
-	if topics, ok := rcm.topicsByUser[userID]; ok {
-		delete(topics, topic)
-	}
-	log.Printf("User %s unsubscribed from topic %s", userID, topic)
-}
-
-// isTopicAllowed returns true when:
-//   - the message has no topic (global/system messages always delivered), or
-//   - the user has explicitly subscribed to the message's topic.
-func (rcm *RedisConnectionManager) isTopicAllowed(userID, topic string) bool {
-	if topic == "" {
-		return true
-	}
-	rcm.mu.Lock()
-	defer rcm.mu.Unlock()
-	topics, ok := rcm.topicsByUser[userID]
-	if !ok {
-		return false
-	}
-	_, subscribed := topics[topic]
-	return subscribed
-}
-
-// Add new WebSocket connection and subscribe to Redis channel
-func (rcm *RedisConnectionManager) Add(userID string, conn *websocket.Conn) {
-	rcm.localCM.Add(userID, conn)
-
-	channel := "user:" + userID + ":events"
-	pubsub := rcm.rdb.Subscribe(rcm.ctx, channel)
+// Add registers a new WebSocket connection. socketID must be unique per
+// connection (e.g. a UUID generated at upgrade time). The node subscribes to the
+// user's direct Redis channel once — subsequent connections for the same user
+// reuse the existing subscription.
+func (rcm *RedisConnectionManager) Add(userID, socketID string, conn *websocket.Conn) {
+	rcm.localCM.Add(socketID, userID, conn)
 
 	rcm.mu.Lock()
-	rcm.subs[userID] = pubsub // store subscription to close later
+	if _, already := rcm.userSubs[userID]; !already {
+		pubsub := rcm.rdb.Subscribe(rcm.ctx, "user:"+userID+":events")
+		rcm.userSubs[userID] = pubsub
+		go rcm.runUserSubscription(userID, pubsub)
+	}
 	rcm.mu.Unlock()
 
-	go func() {
-		for msg := range pubsub.Channel() {
-			var wsMsg contracts.WSMessage
-			if err := json.Unmarshal([]byte(msg.Payload), &wsMsg); err != nil {
-				log.Printf("Invalid Redis message: %v", err)
-				continue
-			}
-			if !rcm.isTopicAllowed(userID, wsMsg.Topic) {
-				log.Printf("Topic %q not subscribed for user %s — skipping", wsMsg.Topic, userID)
-				continue
-			}
-			if err := rcm.localCM.SendMessage(userID, wsMsg); err != nil {
-				log.Printf("Error sending WS message to %s: %v", userID, err)
+	log.Printf("Added socket %s for user %s", socketID, userID)
+}
+
+func (rcm *RedisConnectionManager) runUserSubscription(userID string, pubsub *redis.PubSub) {
+	for msg := range pubsub.Channel() {
+		var wsMsg contracts.WSMessage
+		if err := json.Unmarshal([]byte(msg.Payload), &wsMsg); err != nil {
+			log.Printf("Invalid Redis message for user %s: %v", userID, err)
+			continue
+		}
+		if err := rcm.localCM.SendMessage(userID, wsMsg); err != nil {
+			log.Printf("Error delivering user message to %s: %v", userID, err)
+		}
+	}
+}
+
+// Remove tears down all state for a socket: leaves every room it was in and,
+// when the user's last socket on this node disconnects, closes the user's Redis sub.
+func (rcm *RedisConnectionManager) Remove(socketID string) {
+	userID := rcm.localCM.Remove(socketID)
+
+	rcm.mu.Lock()
+	defer rcm.mu.Unlock()
+
+	// Leave all rooms this socket was in.
+	for roomID := range rcm.socketRooms[socketID] {
+		if sockets, ok := rcm.roomSockets[roomID]; ok {
+			delete(sockets, socketID)
+			if len(sockets) == 0 {
+				delete(rcm.roomSockets, roomID)
+				if sub, ok := rcm.roomSubs[roomID]; ok {
+					sub.Close()
+					delete(rcm.roomSubs, roomID)
+				}
 			}
 		}
-	}()
+	}
+	delete(rcm.socketRooms, socketID)
 
-	log.Printf("Subscribed Redis channel for user %s", userID)
+	// Close the user-direct sub when their last socket on this node is gone.
+	if userID != "" && !rcm.localCM.HasUser(userID) {
+		if sub, ok := rcm.userSubs[userID]; ok {
+			sub.Close()
+			delete(rcm.userSubs, userID)
+		}
+	}
+
+	log.Printf("Removed socket %s (user %s)", socketID, userID)
 }
 
-// Remove WebSocket and unsubscribe
-func (rcm *RedisConnectionManager) Remove(userID string) {
-	rcm.localCM.Remove(userID)
-
+// JoinRoom subscribes a socket to a named room. The room's Redis channel is
+// subscribed once per node; subsequent sockets in the same room reuse it.
+func (rcm *RedisConnectionManager) JoinRoom(socketID, roomID string) {
 	rcm.mu.Lock()
-	if sub, ok := rcm.subs[userID]; ok {
-		sub.Close()
-		delete(rcm.subs, userID)
+	defer rcm.mu.Unlock()
+
+	if _, ok := rcm.socketRooms[socketID]; !ok {
+		rcm.socketRooms[socketID] = make(map[string]struct{})
 	}
-	delete(rcm.topicsByUser, userID)
-	rcm.mu.Unlock()
-	log.Printf("Unsubscribed and removed connection for %s", userID)
+	rcm.socketRooms[socketID][roomID] = struct{}{}
+
+	if _, ok := rcm.roomSockets[roomID]; !ok {
+		rcm.roomSockets[roomID] = make(map[string]struct{})
+	}
+	rcm.roomSockets[roomID][socketID] = struct{}{}
+
+	if _, already := rcm.roomSubs[roomID]; !already {
+		pubsub := rcm.rdb.Subscribe(rcm.ctx, "room:"+roomID)
+		rcm.roomSubs[roomID] = pubsub
+		go rcm.runRoomSubscription(roomID, pubsub)
+	}
+
+	log.Printf("Socket %s joined room %s", socketID, roomID)
 }
 
-// SendMessage – if connection local → send directly (topic-filtered), else publish to Redis.
-// Messages with a non-empty topic are only delivered when the user has subscribed to that topic.
-// Messages with no topic (system/global broadcasts) are always delivered.
-func (rcm *RedisConnectionManager) SendMessage(userID string, msg contracts.WSMessage) error {
-	if !rcm.isTopicAllowed(userID, msg.Topic) {
-		log.Printf("Topic %q not subscribed for user %s — not sending", msg.Topic, userID)
-		return nil
+// LeaveRoom removes a socket from a room and cleans up the Redis sub when the
+// room has no more local sockets.
+func (rcm *RedisConnectionManager) LeaveRoom(socketID, roomID string) {
+	rcm.mu.Lock()
+	defer rcm.mu.Unlock()
+
+	if rooms, ok := rcm.socketRooms[socketID]; ok {
+		delete(rooms, roomID)
+	}
+	if sockets, ok := rcm.roomSockets[roomID]; ok {
+		delete(sockets, socketID)
+		if len(sockets) == 0 {
+			delete(rcm.roomSockets, roomID)
+			if sub, ok := rcm.roomSubs[roomID]; ok {
+				sub.Close()
+				delete(rcm.roomSubs, roomID)
+			}
+		}
 	}
 
-	log.Printf("Attempting to send message to user %s locally with message %v", userID, msg)
+	log.Printf("Socket %s left room %s", socketID, roomID)
+}
+
+func (rcm *RedisConnectionManager) runRoomSubscription(roomID string, pubsub *redis.PubSub) {
+	for msg := range pubsub.Channel() {
+		var wsMsg contracts.WSMessage
+		if err := json.Unmarshal([]byte(msg.Payload), &wsMsg); err != nil {
+			log.Printf("Invalid room message for room %s: %v", roomID, err)
+			continue
+		}
+		rcm.deliverToRoomLocally(roomID, wsMsg)
+	}
+}
+
+func (rcm *RedisConnectionManager) deliverToRoomLocally(roomID string, msg contracts.WSMessage) {
+	rcm.mu.Lock()
+	sockets := make([]string, 0, len(rcm.roomSockets[roomID]))
+	for sid := range rcm.roomSockets[roomID] {
+		sockets = append(sockets, sid)
+	}
+	rcm.mu.Unlock()
+
+	for _, socketID := range sockets {
+		if err := rcm.localCM.SendToSocket(socketID, msg); err != nil {
+			log.Printf("Failed to deliver room %s message to socket %s: %v", roomID, socketID, err)
+		}
+	}
+}
+
+// BroadcastToRoom delivers a message to every socket in the room across all
+// gateway nodes via the "room:{roomID}" Redis channel.
+//
+// Important: we avoid writing to local sockets directly here because each node
+// with local room members is already subscribed to the room channel. Publishing
+// once to Redis ensures every node (including the publisher) delivers the
+// message exactly once and prevents duplicate delivery on the same node.
+func (rcm *RedisConnectionManager) BroadcastToRoom(roomID string, msg contracts.WSMessage) error {
+	b, err := json.Marshal(msg)
+	if err != nil {
+		return err
+	}
+	return rcm.rdb.Publish(rcm.ctx, "room:"+roomID, b).Err()
+}
+
+// SendMessage delivers a message to all sockets of a user on this node.
+// If the user has no local connection, it falls back to publishing on their
+// Redis channel so another node can deliver it. This is the backward-compatible
+// API used by QueueConsumer and other system-notification paths.
+func (rcm *RedisConnectionManager) SendMessage(userID string, msg contracts.WSMessage) error {
+	log.Printf("Attempting to send message to user %s: %+v", userID, msg)
 	if err := rcm.localCM.SendMessage(userID, msg); err == nil {
 		return nil
 	}
 
-	// fallback to Redis publish
-	bytes, err := json.Marshal(msg)
+	b, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
-
-	log.Printf("Publishing to Redis channel for user %s: %s", userID, string(bytes))
-
-	channel := "user:" + userID + ":events"
-	return rcm.rdb.Publish(rcm.ctx, channel, bytes).Err()
+	log.Printf("Publishing to Redis channel for user %s", userID)
+	return rcm.rdb.Publish(rcm.ctx, "user:"+userID+":events", b).Err()
 }
 
-// Upgrade WebSocket request
+// Upgrade upgrades an HTTP connection to WebSocket.
 func (rcm *RedisConnectionManager) Upgrade(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
 	return rcm.localCM.Upgrade(w, r)
 }
 
-func tripChatRiderKey(tripID string) string {
-	return "trip:" + tripID + ":chat:rider"
-}
+// ---- Trip chat pair helpers ----
 
-func tripChatDriverKey(tripID string) string {
-	return "trip:" + tripID + ":chat:driver"
-}
+func tripChatRiderKey(tripID string) string  { return "trip:" + tripID + ":chat:rider" }
+func tripChatDriverKey(tripID string) string { return "trip:" + tripID + ":chat:driver" }
+func activeRiderKey(driverID string) string  { return "driver:" + driverID + ":active_rider" }
+func activeDriverKey(riderID string) string  { return "rider:" + riderID + ":active_driver" }
 
-// SetTripChatPair stores the rider/driver pair for a trip so WS chat can be authorized and routed.
+// SetTripChatPair stores the rider/driver pair for a trip in Redis so that chat
+// can be authorised and routed even across gateway restarts.
 func (rcm *RedisConnectionManager) SetTripChatPair(tripID, riderID, driverID string, ttl time.Duration) error {
 	if tripID == "" || riderID == "" || driverID == "" {
 		return fmt.Errorf("tripID, riderID and driverID are required")
 	}
-
 	pipe := rcm.rdb.TxPipeline()
-	pipe.Set(rcm.ctx, tripChatRiderKey(tripID), riderID, ttl)   // registers tripID/riderID in Redis with a TTL so that it expires after some time and doesn't take up space indefinitely
-	pipe.Set(rcm.ctx, tripChatDriverKey(tripID), driverID, ttl) // registers tripID/driverID in Redis with a TTL so that it expires after some time and doesn't take up space indefinitely
+	pipe.Set(rcm.ctx, tripChatRiderKey(tripID), riderID, ttl)
+	pipe.Set(rcm.ctx, tripChatDriverKey(tripID), driverID, ttl)
 	_, err := pipe.Exec(rcm.ctx)
 	return err
 }
 
-// ResolveTripChatPeer returns the peer user ID if senderID is one of the assigned trip participants.
+// ResolveTripChatPeer returns the peer userID for the sender in a trip chat.
+// Returns ErrTripChatPairNotFound when the pair has expired or was never set, and
+// ErrTripChatUnauthorized when senderID is not one of the registered participants.
 func (rcm *RedisConnectionManager) ResolveTripChatPeer(tripID, senderID string) (string, error) {
 	if tripID == "" || senderID == "" {
 		return "", fmt.Errorf("tripID and senderID are required")
 	}
-
-	values, err := rcm.rdb.MGet(rcm.ctx, tripChatRiderKey(tripID), tripChatDriverKey(tripID)).Result() // mget means multi get, it gets both rider and driver id in one call
+	values, err := rcm.rdb.MGet(rcm.ctx, tripChatRiderKey(tripID), tripChatDriverKey(tripID)).Result()
 	if err != nil {
 		return "", err
 	}
-
 	riderID, riderOk := values[0].(string)
 	driverID, driverOk := values[1].(string)
 	if !riderOk || !driverOk || riderID == "" || driverID == "" {
 		return "", ErrTripChatPairNotFound
 	}
-
 	switch senderID {
 	case riderID:
 		return driverID, nil
@@ -201,4 +277,34 @@ func (rcm *RedisConnectionManager) ResolveTripChatPeer(tripID, senderID string) 
 	default:
 		return "", ErrTripChatUnauthorized
 	}
+}
+
+// ClearTripChatPair removes trip chat pair keys and their derived active rider/driver
+// pointers when available. This is used when a trip is cancelled so stale state
+// does not keep chat/location paths alive.
+func (rcm *RedisConnectionManager) ClearTripChatPair(tripID string) error {
+	if tripID == "" {
+		return fmt.Errorf("tripID is required")
+	}
+	values, err := rcm.rdb.MGet(rcm.ctx, tripChatRiderKey(tripID), tripChatDriverKey(tripID)).Result()
+	if err != nil {
+		return err
+	}
+
+	var riderID, driverID string
+	if len(values) >= 2 {
+		riderID, _ = values[0].(string)
+		driverID, _ = values[1].(string)
+	}
+
+	pipe := rcm.rdb.TxPipeline()
+	pipe.Del(rcm.ctx, tripChatRiderKey(tripID), tripChatDriverKey(tripID))
+	if riderID != "" {
+		pipe.Del(rcm.ctx, activeDriverKey(riderID))
+	}
+	if driverID != "" {
+		pipe.Del(rcm.ctx, activeRiderKey(driverID))
+	}
+	_, err = pipe.Exec(rcm.ctx)
+	return err
 }

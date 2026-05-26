@@ -161,3 +161,21 @@ func (s *TripService) GetTripByID(ctx context.Context, id string) (*domain.TripM
 func (s *TripService) UpdateTrip(ctx context.Context, tripID string, status string, driver *pb.TripDriver) error {
 	return s.repo.UpdateTrip(ctx, tripID, status, driver)
 }
+
+func (s *TripService) CancelTrip(ctx context.Context, tripID, requesterUserID string) (*domain.TripModel, error) {
+	trip, err := s.repo.GetTripByID(ctx, tripID)
+	if err != nil {
+		return nil, fmt.Errorf("trip not found: %w", err)
+	}
+	if trip.UserID != requesterUserID {
+		return nil, fmt.Errorf("only the rider who created the trip can cancel it")
+	}
+	if trip.Status == "cancelled" {
+		return trip, nil // idempotent
+	}
+	if err := s.repo.UpdateTrip(ctx, tripID, "cancelled", nil); err != nil {
+		return nil, fmt.Errorf("failed to cancel trip: %w", err)
+	}
+	trip.Status = "cancelled"
+	return trip, nil
+}

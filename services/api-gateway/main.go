@@ -66,7 +66,6 @@ func main() {
 	}
 	log.Println("✅ Connected to Redis")
 
-	connManager := messaging.NewRedisConnectionManager(rdb)
 	rateLimiter := NewRateLimiter(rdb)
 
 	// Initialize shared gRPC clients once at startup.
@@ -81,12 +80,6 @@ func main() {
 		log.Fatalf("failed to create login service client: %v", err)
 	}
 	defer loginClient.Close()
-
-	driverClient, err = grpc_clients.NewDriverServiceClient()
-	if err != nil {
-		log.Fatalf("failed to create driver service client: %v", err)
-	}
-	defer driverClient.Close()
 
 	mux := http.NewServeMux() // create a new ServeMux for routing
 
@@ -111,6 +104,12 @@ func main() {
 			tracing.WrapHandlerFunc(HandleStartTrip, "/trip/start"),
 		),
 	))
+	// Trip cancellation (10 req/min per user)
+	mux.Handle("POST /trip/cancel", wsAuthMiddleware(
+		rateLimiter.Limit(10, 60, userKey("trip:cancel"))(
+			tracing.WrapHandlerFunc(HandleCancelTrip, "/trip/cancel"),
+		),
+	))
 
 	// Auth routes
 	mux.Handle("POST /auth/signup", tracing.WrapHandlerFunc(HandleSignup, "/auth/signup"))
@@ -119,13 +118,6 @@ func main() {
 	mux.Handle("POST /auth/refresh", tracing.WrapHandlerFunc(HandleRefreshToken, "/auth/refresh"))
 	mux.Handle("POST /auth/logout", tracing.WrapHandlerFunc(HandleLogout, "/auth/logout"))
 
-	// WS connections (3 active per user, enforced inside the handler)
-	mux.Handle("/ws/drivers", wsAuthMiddleware(tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleDriversWebSocket(w, r, rabbitmq, connManager, rateLimiter)
-	}, "/ws/drivers")))
-	mux.Handle("/ws/riders", wsAuthMiddleware(tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleRidersWebSocket(w, r, rabbitmq, connManager, rateLimiter)
-	}, "/ws/riders")))
 	// Stripe webhooks — no JWT auth, IP whitelist only
 	mux.Handle("/webhook/stripe", StripeIPWhitelist(tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handleStripeWebhook(w, r, rabbitmq)

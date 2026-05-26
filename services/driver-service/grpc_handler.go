@@ -24,7 +24,7 @@ func NewGrpcHandler(s *grpc.Server, service *Service) {
 }
 
 func (h *driverGrpcHandler) UnregisterDriver(ctx context.Context, req *pb.RegisterDriverRequest) (*pb.RegisterDriverResponse, error) {
-	h.service.RemoveDriverFromGeo(req.GetDriverID(), req.GetPackageSlug())
+	h.service.RemoveDriverFromGeo(ctx, req.GetDriverID(), req.GetPackageSlug())
 
 	return &pb.RegisterDriverResponse{
 		Driver: &pb.Driver{

@@ -15,80 +15,112 @@ var (
 	ErrConnectionNotFound = errors.New("connection not found")
 )
 
-// connWrapper is a wrapper around the websocket connection to allow for thread-safe operations
-// This is necessary because the websocket connection is not thread-safe
-type connWrapper struct {
-	conn  *websocket.Conn
-	mutex sync.Mutex // If multiple goroutines try to write a message to the same conn, the lock ensures only one goroutine does it at a time.
+// connRecord holds a WebSocket connection together with its owning userID.
+// The per-record mutex ensures only one goroutine writes to the connection at a time.
+type connRecord struct {
+	conn   *websocket.Conn
+	userID string
+	mu     sync.Mutex
 }
 
+// ConnectionManager tracks connections by socketID (one unique ID per WebSocket
+// connection) and maintains a reverse index from userID to all its socketIDs so
+// that a single user on multiple devices receives every message.
 type ConnectionManager struct {
-	connections map[string]*connWrapper // Local connections storage (userId -> connection)
-	mutex       sync.RWMutex
+	bySocket map[string]*connRecord         // socketID → record
+	byUser   map[string]map[string]struct{} // userID  → set of socketIDs
+	mu       sync.RWMutex
 }
-
-// If multiple goroutines try to write a message to the same conn, the lock ensures only one goroutine does it at a time.
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for now
+		return true
 	},
 }
 
-// Note that on multiple instances of the API gateway, the connection manager needs to store the connections on a separate shared storage.
 func NewConnectionManager() *ConnectionManager {
 	return &ConnectionManager{
-		connections: make(map[string]*connWrapper),
+		bySocket: make(map[string]*connRecord),
+		byUser:   make(map[string]map[string]struct{}),
 	}
 }
 
 func (cm *ConnectionManager) Upgrade(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		return nil, err
+	return upgrader.Upgrade(w, r, nil)
+}
+
+// Add registers a new WebSocket connection under socketID (unique per connection)
+// and links it to the owning userID for multi-device fan-out.
+func (cm *ConnectionManager) Add(socketID, userID string, conn *websocket.Conn) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.bySocket[socketID] = &connRecord{conn: conn, userID: userID}
+	if _, ok := cm.byUser[userID]; !ok {
+		cm.byUser[userID] = make(map[string]struct{})
 	}
-	return conn, nil
+	cm.byUser[userID][socketID] = struct{}{}
+	log.Printf("Added socket %s for user %s", socketID, userID)
 }
 
-func (cm *ConnectionManager) Add(id string, conn *websocket.Conn) {
-	cm.mutex.Lock()
-	defer cm.mutex.Unlock()
-	cm.connections[id] = &connWrapper{
-		conn:  conn,
-		mutex: sync.Mutex{},
+// Remove removes a socket and returns the owning userID (empty string if not found).
+func (cm *ConnectionManager) Remove(socketID string) string {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	rec, ok := cm.bySocket[socketID]
+	if !ok {
+		return ""
 	}
-
-	log.Printf("Added connection for user %s", id)
-}
-
-func (cm *ConnectionManager) Remove(id string) {
-	cm.mutex.Lock()
-	defer cm.mutex.Unlock()
-	delete(cm.connections, id)
-}
-
-func (cm *ConnectionManager) Get(id string) (*websocket.Conn, bool) {
-	cm.mutex.RLock()
-	defer cm.mutex.RUnlock()
-	wrapper, exists := cm.connections[id]
-	if !exists {
-		return nil, false
+	userID := rec.userID
+	delete(cm.bySocket, socketID)
+	if sockets, ok := cm.byUser[userID]; ok {
+		delete(sockets, socketID)
+		if len(sockets) == 0 {
+			delete(cm.byUser, userID)
+		}
 	}
-	return wrapper.conn, true
+	return userID
 }
 
-func (cm *ConnectionManager) SendMessage(id string, message contracts.WSMessage) error {
-	log.Printf("Sending message to user %s: %+v", id, message)
-	cm.mutex.RLock()
-	wrapper, exists := cm.connections[id]
-	cm.mutex.RUnlock()
+// HasUser returns true when the user has at least one active socket on this node.
+func (cm *ConnectionManager) HasUser(userID string) bool {
+	cm.mu.RLock()
+	defer cm.mu.RUnlock()
+	return len(cm.byUser[userID]) > 0
+}
 
-	if !exists {
+// SendToSocket writes a message to a specific socket connection.
+func (cm *ConnectionManager) SendToSocket(socketID string, msg contracts.WSMessage) error {
+	cm.mu.RLock()
+	rec, ok := cm.bySocket[socketID]
+	cm.mu.RUnlock()
+	if !ok {
 		return ErrConnectionNotFound
 	}
+	rec.mu.Lock()
+	defer rec.mu.Unlock()
+	return rec.conn.WriteJSON(msg)
+}
 
-	wrapper.mutex.Lock()
-	defer wrapper.mutex.Unlock()
+// SendMessage delivers a message to every socket owned by userID.
+// This preserves the original API while supporting multi-device users.
+func (cm *ConnectionManager) SendMessage(userID string, msg contracts.WSMessage) error {
+	log.Printf("Sending message to user %s: %+v", userID, msg)
+	cm.mu.RLock()
+	socketIDs := make([]string, 0, len(cm.byUser[userID]))
+	for sid := range cm.byUser[userID] {
+		socketIDs = append(socketIDs, sid)
+	}
+	cm.mu.RUnlock()
 
-	return wrapper.conn.WriteJSON(message)
+	if len(socketIDs) == 0 {
+		return ErrConnectionNotFound
+	}
+	var lastErr error
+	for _, sid := range socketIDs {
+		if err := cm.SendToSocket(sid, msg); err != nil {
+			log.Printf("Error sending to socket %s (user %s): %v", sid, userID, err)
+			lastErr = err
+		}
+	}
+	return lastErr
 }

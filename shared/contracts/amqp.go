@@ -15,6 +15,7 @@ const (
 	TripEventDriverAssigned      = "trip.event.driver_assigned"
 	TripEventNoDriversFound      = "trip.event.no_drivers_found"
 	TripEventDriverNotInterested = "trip.event.driver_not_interested"
+	TripEventCancelled           = "trip.event.cancelled"
 
 	// Driver commands (driver.cmd.*)
 	DriverCmdTripRequest = "driver.cmd.trip_request"
@@ -34,4 +35,10 @@ const (
 
 	// Driver events (driver.event.*)
 	DriverEventLocation = "driver.event.location" // driver service → rider WS: real-time position of assigned driver
+
+	// Chat commands (chat.cmd.*)
+	ChatCmdSend = "chat.cmd.send" // ws-gateway → chat-service: persist + ack
+
+	// Chat events (chat.event.*)
+	ChatEventDelivered = "chat.event.delivered" // chat-service → ws-gateway: message stored & delivered
 )

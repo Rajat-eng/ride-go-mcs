@@ -2,7 +2,6 @@
 
 import { MapContainer, Marker, Popup, TileLayer } from 'react-leaflet'
 import L from 'leaflet';
-import { MapClickHandler } from './MapClickHandler';
 import { useRef } from "react";
 import { CarPackageSlug } from "../types";
 import { DriverTripOverview } from "./DriverTripOverview";
@@ -41,22 +40,16 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
     driver,
     tripStatus,
     requestedTrip,
-    error,
     driverLocation,
     locationReady,
     driverGeohash,
     parsedRoute,
     routeDestination,
     routeStart,
-    handleMapClick,
     handleAcceptTrip,
     handleDeclineTrip,
     handleCancelTrip,
   } = useDriverTrip(packageSlug);
-
-  if (error) {
-    return <div>Error: {error}</div>
-  }
 
   if (!locationReady) {
     return <div>Waiting for location...</div>
@@ -115,8 +108,6 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
           {parsedRoute && (
             <RoutingControl route={parsedRoute} />
           )}
-
-          <MapClickHandler onClick={(e) => handleMapClick(e.latlng)} />
         </MapContainer>
       </div>
 

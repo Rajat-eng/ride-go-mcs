@@ -187,6 +187,9 @@ docker_build(
   'ride-sharing/web',
   '.',
   dockerfile='./infra/development/docker/web.Dockerfile',
+  build_args={
+    'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY': os.getenv('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', ''),
+  },
 )
 
 k8s_yaml('./infra/development/k8s/web-deployment.yaml')
@@ -224,6 +227,69 @@ k8s_yaml('./infra/development/k8s/payment-service-deployment.yaml')
 k8s_resource('payment-service', resource_deps=['payment-service-compile', 'rabbitmq'], labels="services")
 
 ### End of Payment Service ###
+
+### WS Gateway ###
+
+ws_gateway_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/ws-gateway ./services/ws-gateway'
+if os.name == 'nt':
+  ws_gateway_compile_cmd = './infra/development/docker/ws-gateway-build.bat'
+
+local_resource(
+  'ws-gateway-compile',
+  ws_gateway_compile_cmd,
+  deps=['./services/ws-gateway', './shared'], labels="compiles")
+
+docker_build_with_restart(
+  'ride-sharing/ws-gateway',
+  '.',
+  entrypoint=['/app/build/ws-gateway'],
+  dockerfile='./infra/development/docker/ws-gateway.Dockerfile',
+  only=[
+    './build/ws-gateway',
+    './shared',
+  ],
+  live_update=[
+    sync('./build', '/app/build'),
+    sync('./shared', '/app/shared'),
+  ],
+)
+
+k8s_yaml('./infra/development/k8s/ws-gateway-deployment.yaml')
+k8s_resource('ws-gateway', port_forwards=8082,
+             resource_deps=['ws-gateway-compile', 'rabbitmq', 'redis'], labels="services")
+
+### End of WS Gateway ###
+
+### Chat Service ###
+
+chat_compile_cmd = 'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o build/chat-service ./services/chat-service/cmd/main.go'
+if os.name == 'nt':
+  chat_compile_cmd = './infra/development/docker/chat-build.bat'
+
+local_resource(
+  'chat-service-compile',
+  chat_compile_cmd,
+  deps=['./services/chat-service', './shared'], labels="compiles")
+
+docker_build_with_restart(
+  'ride-sharing/chat-service',
+  '.',
+  entrypoint=['/app/build/chat-service'],
+  dockerfile='./infra/development/docker/chat-service.Dockerfile',
+  only=[
+    './build/chat-service',
+    './shared',
+  ],
+  live_update=[
+    sync('./build', '/app/build'),
+    sync('./shared', '/app/shared'),
+  ],
+)
+
+k8s_yaml('./infra/development/k8s/chat-service-deployment.yaml')
+k8s_resource('chat-service', resource_deps=['chat-service-compile', 'rabbitmq'], labels="services")
+
+### End of Chat Service ###
 
 ### Jaeger ###
 k8s_yaml('./infra/development/k8s/jaeger.yaml')

@@ -55,7 +55,14 @@ export const tripApi = createApi({
         data: payload,
       }),
     }),
+    cancelTrip: builder.mutation<void, { tripID: string }>({
+      query: (payload) => ({
+        url: BackendEndpoints.CANCEL_TRIP,
+        method: 'POST',
+        data: payload,
+      }),
+    }),
   }),
 });
 
-export const { usePreviewTripMutation, useStartTripMutation } = tripApi;
+export const { usePreviewTripMutation, useStartTripMutation, useCancelTripMutation } = tripApi;

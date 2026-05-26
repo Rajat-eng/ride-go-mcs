@@ -88,6 +88,9 @@ export const RiderTripOverview = ({
             onSend={(text) => onSendChatMessage(paymentSession.tripID, text)}
           />
           <StripePaymentButton paymentSession={paymentSession} />
+          <Button variant="destructive" className="w-full" onClick={onCancel}>
+            Cancel current trip
+          </Button>
         </div>
       </TripOverviewCard>
     )

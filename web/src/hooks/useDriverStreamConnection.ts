@@ -8,8 +8,19 @@ import {
   setRequestedTrip,
   setTripStatus,
   addChatMessage,
-  setError,
+  resetTrip,
 } from '../store/slices/driverSlice';
+import { logout } from '../store/slices/authSlice';
+import { addError } from '../store/slices/uiSlice';
+
+function isTokenExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.exp * 1000 < Date.now();
+  } catch {
+    return true;
+  }
+}
 
 interface useDriverConnectionProps {
   userID: string;
@@ -30,6 +41,11 @@ export const useDriverStreamConnection = ({
   useEffect(() => {
     if (!userID || !accessToken || !packageSlug) return;
 
+    if (isTokenExpired(accessToken)) {
+      dispatch(logout());
+      return;
+    }
+
     const websocket = new WebSocket(
       `${WEBSOCKET_URL}${BackendEndpoints.WS_DRIVERS}?token=${encodeURIComponent(accessToken)}&packageSlug=${encodeURIComponent(packageSlug)}`,
     );
@@ -41,7 +57,7 @@ export const useDriverStreamConnection = ({
       const message = JSON.parse(event.data) as ServerWsMessage;
 
       if (!message || !isValidWsMessage(message)) {
-        dispatch(setError(`Unknown message type "${message}", allowed types are: ${Object.values(TripEvents).join(', ')}`));
+        dispatch(addError({ message: `Unknown WS message type received: "${(message as {type?:string})?.type ?? message}"`, timestamp: Date.now() }));
         return;
       }
 
@@ -61,16 +77,36 @@ export const useDriverStreamConnection = ({
         case TripEvents.ChatMessageReceived:
           dispatch(addChatMessage(message.data));
           break;
+        case TripEvents.Cancelled:
+          {
+            const tripID = (message.data as { tripID?: string } | undefined)?.tripID;
+            if (tripID) {
+              websocket.send(JSON.stringify({ type: TripEvents.WsTopicUnsubscribe, data: { topic: `trip:${tripID}` } }));
+              websocket.send(JSON.stringify({ type: TripEvents.WsTopicUnsubscribe, data: { topic: `trip:${tripID}:chat` } }));
+            }
+            dispatch(resetTrip());
+            dispatch(setTripStatus(TripEvents.Cancelled));
+          }
+          break;
       }
     };
 
-    websocket.onclose = () => {
+    websocket.onclose = (e: CloseEvent) => {
       wsRef.current = null;
+      if (e.code === 1000 || e.code === 1001) return; // clean close, no error
+      if (e.code === 1006) {
+        // Abnormal closure — server rejected the upgrade (e.g. 401) or network dropped.
+        if (isTokenExpired(accessToken)) {
+          dispatch(logout());
+        } else {
+          dispatch(addError({ message: 'Lost connection to server. Please refresh.', timestamp: Date.now() }));
+        }
+      } else {
+        dispatch(addError({ message: e.reason || `Connection closed unexpectedly (code ${e.code}).`, timestamp: Date.now() }));
+      }
     };
 
-    websocket.onerror = () => {
-      dispatch(setError('WebSocket error occurred'));
-    };
+    websocket.onerror = () => { /* onclose fires next with the close code — handled there */ };
 
     return () => {
       websocket.close();

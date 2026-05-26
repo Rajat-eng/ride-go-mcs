@@ -45,3 +45,23 @@ func (p *TripEventPublisher) PublishTripCreated(ctx context.Context, trip *domai
 		OwnerID: trip.UserID,
 	})
 }
+
+// PublishTripCancelled notifies both rider and driver (if assigned) about the cancellation.
+// It publishes a single AMQP message whose Data contains the full TripCancelledData so the
+// ws-gateway cancel consumer can fan-out to both parties in one shot.
+func (p *TripEventPublisher) PublishTripCancelled(ctx context.Context, tripID, riderID, driverID string) error {
+	payload := &messaging.TripCancelledData{
+		TripID:   tripID,
+		RiderID:  riderID,
+		DriverID: driverID,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	log.Printf("Publishing Trip Cancelled event for tripID: %s riderID: %s driverID: %s", tripID, riderID, driverID)
+	return p.rabbitMQ.PublishMessage(ctx, contracts.TripEventCancelled, contracts.AmqpMessage{
+		OwnerID: riderID, // ownerID is not used by the cancel consumer, but required by the envelope
+		Data:    data,
+	})
+}

@@ -95,3 +95,25 @@ func (h *gRPCHandler) PreviewTrip(ctx context.Context, req *pb.PreviewTripReques
 		RideFares: preview.ToRideFaresProto(),
 	}, nil
 }
+
+func (h *gRPCHandler) CancelTrip(ctx context.Context, req *pb.CancelTripRequest) (*pb.CancelTripResponse, error) {
+	tripID := req.GetTripID()
+	userID := req.GetUserID()
+
+	trip, err := h.service.CancelTrip(ctx, tripID, userID)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to cancel trip: %v", err)
+	}
+
+	driverID := ""
+	if trip.Driver != nil {
+		driverID = trip.Driver.Id
+	}
+
+	if err := h.publisher.PublishTripCancelled(ctx, tripID, trip.UserID, driverID); err != nil {
+		log.Printf("CancelTrip: failed to publish cancellation event for trip %s: %v", tripID, err)
+		// Don't fail the RPC — trip is already marked cancelled in MongoDB.
+	}
+
+	return &pb.CancelTripResponse{DriverID: driverID}, nil
+}

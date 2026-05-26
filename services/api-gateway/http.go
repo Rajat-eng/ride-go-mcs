@@ -95,6 +95,42 @@ func HandleStartTrip(w http.ResponseWriter, r *http.Request) {
 	util.RespondWithSuccess(w, http.StatusOK, "Trip Started", trip)
 }
 
+func HandleCancelTrip(w http.ResponseWriter, r *http.Request) {
+	ctx, span := tracer.Start(r.Context(), "handleCancelTrip")
+	defer span.End()
+
+	var reqBody CancelTripRequest
+	if err := json.NewDecoder(r.Body).Decode(&reqBody); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	userID, ok := r.Context().Value(ctxKeyUserID).(string)
+	if !ok || userID == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if err := types.Validate.Struct(reqBody); err != nil {
+		validationErrors := err.(validator.ValidationErrors)
+		errors := make([]string, len(validationErrors))
+		for i, e := range validationErrors {
+			errors[i] = util.FormatValidationError(e)
+		}
+		util.RespondWithError(w, http.StatusBadRequest, "Validation failed", errors)
+		return
+	}
+
+	if _, err := tripClient.Client.CancelTrip(ctx, reqBody.toProto(userID)); err != nil {
+		log.Printf("HandleCancelTrip: gRPC error: %v", err)
+		http.Error(w, "Failed to cancel trip", http.StatusInternalServerError)
+		return
+	}
+
+	util.RespondWithSuccess(w, http.StatusOK, "Trip cancelled", nil)
+}
+
 func handleStripeWebhook(w http.ResponseWriter, r *http.Request, rb *messaging.RabbitMQ) {
 	ctx, span := tracer.Start(r.Context(), "handleStripeWebhook")
 	defer span.End()

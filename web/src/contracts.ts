@@ -5,6 +5,7 @@ import { Coordinate, Driver, Route, RouteFare, Trip } from "./types";
 export enum BackendEndpoints {
   PREVIEW_TRIP = "/trip/preview",
   START_TRIP = "/trip/start",
+  CANCEL_TRIP = "/trip/cancel",
   WS_DRIVERS = "/drivers",
   WS_RIDERS = "/riders",
 }
@@ -14,6 +15,7 @@ export enum TripEvents {
   DriverAssigned = "trip.event.driver_assigned",
   Completed = "trip.event.completed",
   Cancelled = "trip.event.cancelled",
+  TripCmdCancel = "trip.cmd.cancel",
   Created = "trip.event.created",
   DriverLocation = "driver.cmd.location",
   DriverTripRequest = "driver.cmd.trip_request",
@@ -39,6 +41,7 @@ export type ServerWsMessage = (
   | DriverRegisterRequest
   | TripCreatedRequest
   | NoDriversFoundRequest
+  | TripCancelledRequest
 ) & { topic?: string };
 
 // Messages sent from the client to the server via the websocket
@@ -48,6 +51,7 @@ export type ClientWsMessage =
   | ChatMessageSendRequest
   | WsTopicSubscribeMessage
   | WsTopicUnsubscribeMessage
+  | TripCancelRequest
 
 export interface WsTopicSubscribeMessage {
   type: TripEvents.WsTopicSubscribe;
@@ -66,6 +70,13 @@ interface TripCreatedRequest {
 
 interface NoDriversFoundRequest {
   type: TripEvents.NoDriversFound;
+}
+
+interface TripCancelledRequest {
+  type: TripEvents.Cancelled;
+  data: {
+    tripID: string;
+  };
 }
 
 interface DriverRegisterRequest {
@@ -139,6 +150,13 @@ interface DriverLocationMessage {
   data: {
     location: Coordinate;
     geohash: string;
+  };
+}
+
+interface TripCancelRequest {
+  type: TripEvents.TripCmdCancel;
+  data: {
+    tripID: string;
   };
 }
 
