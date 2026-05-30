@@ -84,10 +84,10 @@ func main() {
 	mux := http.NewServeMux() // create a new ServeMux for routing
 
 	// Define a simple health check endpoint
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
-	})
+	}, "/"))
 
 	// tracing middleware adds extra headers, automatatic tracing , methods
 	// tracer.start becomes child span(cusotm span) for this middlware

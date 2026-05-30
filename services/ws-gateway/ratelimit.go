@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"time"
 
 	"ride-sharing/shared/env"
 
@@ -20,6 +21,8 @@ if current == 1 then
 end
 return current
 `)
+
+const wsConnectionGateTTLSeconds = 60
 
 type RateLimiter struct {
 	rdb *redis.Client
@@ -57,7 +60,7 @@ func (rl *RateLimiter) Limit(limit int, windowSecs int, keyFn func(*http.Request
 // connection closes to decrement the counter.
 func (rl *RateLimiter) WsConnectionGate(ctx context.Context, userID string, max int) (bool, func()) {
 	key := fmt.Sprintf("ws:conns:%s", userID)
-	count, err := luaRateLimit.Run(ctx, rl.rdb, []string{key}, 86400).Int()
+	count, err := luaRateLimit.Run(ctx, rl.rdb, []string{key}, wsConnectionGateTTLSeconds).Int()
 	if err != nil {
 		log.Printf("ws connection gate redis error: %v", err)
 		return true, func() {} // fail open
@@ -66,9 +69,24 @@ func (rl *RateLimiter) WsConnectionGate(ctx context.Context, userID string, max 
 		return false, func() {}
 	}
 	release := func() {
-		rl.rdb.Decr(ctx, key)
+		remaining, err := rl.rdb.Decr(ctx, key).Result()
+		if err != nil {
+			log.Printf("ws connection gate release redis error: %v", err)
+			return
+		}
+		if remaining <= 0 {
+			rl.rdb.Del(ctx, key)
+		}
 	}
 	return true, release
+}
+
+// RefreshWsConnectionGate keeps the gate key alive while the socket is active.
+func (rl *RateLimiter) RefreshWsConnectionGate(ctx context.Context, userID string) {
+	key := fmt.Sprintf("ws:conns:%s", userID)
+	if err := rl.rdb.Expire(ctx, key, time.Duration(wsConnectionGateTTLSeconds)*time.Second).Err(); err != nil {
+		log.Printf("ws connection gate refresh redis error: %v", err)
+	}
 }
 
 func userKey(prefix string) func(*http.Request) string {

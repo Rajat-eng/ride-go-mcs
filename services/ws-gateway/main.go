@@ -98,18 +98,24 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("ws-gateway OK"))
-	})
+	}, "/"))
 
-	mux.Handle("/ws/riders", wsAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleRidersWebSocket(w, r, rabbitmq, connManager, rateLimiter)
-	})))
+	mux.Handle("/ws/riders", tracing.WrapHandler(
+		wsAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handleRidersWebSocket(w, r, rabbitmq, connManager, rateLimiter)
+		})),
+		"/ws/riders",
+	))
 
-	mux.Handle("/ws/drivers", wsAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		handleDriversWebSocket(w, r, rabbitmq, connManager, rateLimiter)
-	})))
+	mux.Handle("/ws/drivers", tracing.WrapHandler(
+		wsAuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			handleDriversWebSocket(w, r, rabbitmq, connManager, rateLimiter)
+		})),
+		"/ws/drivers",
+	))
 
 	allowedOrigins := strings.Split(env.GetString("ALLOWED_ORIGINS", "http://localhost:3000"), ",")
 	corsHandler := cors.New(cors.Options{

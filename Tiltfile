@@ -293,7 +293,25 @@ k8s_resource('chat-service', resource_deps=['chat-service-compile', 'rabbitmq'],
 
 ### Jaeger ###
 k8s_yaml('./infra/development/k8s/jaeger.yaml')
-k8s_resource('jaeger', port_forwards=['16686:16686', '14268:14268'], labels="tooling")
+k8s_resource(
+  'jaeger',
+  port_forwards=['16686:16686', '14268:14268'],
+  resource_deps=[
+    'rabbitmq',
+    'redis',
+    'postgres',
+    'api-gateway',
+    'trip-service',
+    'login-service',
+    'driver-service',
+    'dlq-worker',
+    'web',
+    'payment-service',
+    'ws-gateway',
+    'chat-service',
+  ],
+  labels="tooling",
+)
 ### End of Jaeger ###
 
 

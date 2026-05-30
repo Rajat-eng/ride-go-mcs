@@ -8,17 +8,27 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"ride-sharing/shared/contracts"
 
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var (
 	ErrTripChatPairNotFound = errors.New("trip chat pair not found")
 	ErrTripChatUnauthorized = errors.New("sender is not part of trip chat pair")
+)
+
+const (
+	userEventStreamTTL    = 2 * time.Hour
+	userEventStreamMaxLen = int64(500)
 )
 
 // RedisConnectionManager manages WebSocket connections across multiple gateway
@@ -41,6 +51,10 @@ type RedisConnectionManager struct {
 	roomSubs    map[string]*redis.PubSub       // roomID  → room broadcast sub
 	socketRooms map[string]map[string]struct{} // socketID → set of roomIDs
 	roomSockets map[string]map[string]struct{} // roomID   → set of local socketIDs
+	tracer      trace.Tracer
+	persisted   atomic.Uint64
+	replayed    atomic.Uint64
+	replayFails atomic.Uint64
 	mu          sync.Mutex
 }
 
@@ -53,6 +67,7 @@ func NewRedisConnectionManager(rdb *redis.Client) *RedisConnectionManager {
 		roomSubs:    make(map[string]*redis.PubSub),
 		socketRooms: make(map[string]map[string]struct{}),
 		roomSockets: make(map[string]map[string]struct{}),
+		tracer:      otel.GetTracerProvider().Tracer("redis-streams"),
 	}
 }
 
@@ -63,15 +78,147 @@ func NewRedisConnectionManager(rdb *redis.Client) *RedisConnectionManager {
 func (rcm *RedisConnectionManager) Add(userID, socketID string, conn *websocket.Conn) {
 	rcm.localCM.Add(socketID, userID, conn)
 
+	replayPending := false
 	rcm.mu.Lock()
 	if _, already := rcm.userSubs[userID]; !already {
 		pubsub := rcm.rdb.Subscribe(rcm.ctx, "user:"+userID+":events")
 		rcm.userSubs[userID] = pubsub
 		go rcm.runUserSubscription(userID, pubsub)
+		replayPending = true
 	}
 	rcm.mu.Unlock()
 
+	if replayPending {
+		go rcm.replayUserStream(userID)
+	}
+
 	log.Printf("Added socket %s for user %s", socketID, userID)
+}
+
+func userEventStreamKey(userID string) string {
+	return "user:" + userID + ":stream"
+}
+
+func (rcm *RedisConnectionManager) persistUserMessage(userID string, msg contracts.WSMessage) error {
+	ctx, span := rcm.tracer.Start(rcm.ctx, "rcm.stream.persist",
+		trace.WithAttributes(
+			attribute.String("messaging.user_id", userID),
+			attribute.String("messaging.destination", userEventStreamKey(userID)),
+		),
+	)
+	defer span.End()
+
+	payload, err := json.Marshal(msg)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	key := userEventStreamKey(userID)
+	if err := rcm.rdb.XAdd(ctx, &redis.XAddArgs{
+		Stream: key,
+		MaxLen: userEventStreamMaxLen,
+		Approx: true,
+		Values: map[string]any{
+			"payload": string(payload),
+		},
+	}).Err(); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
+
+	_ = rcm.rdb.Expire(ctx, key, userEventStreamTTL).Err()
+	total := rcm.persisted.Add(1)
+	span.SetAttributes(
+		attribute.Int("stream.persisted.count", 1),
+		attribute.Int64("stream.persisted.total", int64(total)),
+	)
+	log.Printf("stream persisted count=1 total=%d user=%s stream=%s", total, userID, key)
+	return nil
+}
+
+func (rcm *RedisConnectionManager) replayUserStream(userID string) {
+	ctx, span := rcm.tracer.Start(rcm.ctx, "rcm.stream.replay",
+		trace.WithAttributes(
+			attribute.String("messaging.user_id", userID),
+			attribute.String("messaging.destination", userEventStreamKey(userID)),
+		),
+	)
+	defer span.End()
+
+	key := userEventStreamKey(userID)
+	entries, err := rcm.rdb.XRange(ctx, key, "-", "+").Result()
+	if err != nil {
+		rcm.replayFails.Add(1)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		span.SetAttributes(attribute.Int64("stream.replay.failures.total", int64(rcm.replayFails.Load())))
+		log.Printf("Failed to read pending stream for user %s: %v", userID, err)
+		return
+	}
+	span.SetAttributes(attribute.Int("stream.replay.pending", len(entries)))
+	if len(entries) == 0 {
+		log.Printf("replayed count=0 replay failures=0 user=%s stream=%s", userID, key)
+		return
+	}
+
+	acked := make([]string, 0, len(entries))
+	replayedDelta := 0
+	failuresDelta := 0
+	for _, entry := range entries {
+		raw, ok := entry.Values["payload"]
+		if !ok {
+			acked = append(acked, entry.ID)
+			continue
+		}
+
+		payload, ok := raw.(string)
+		if !ok {
+			acked = append(acked, entry.ID)
+			continue
+		}
+
+		var wsMsg contracts.WSMessage
+		if err := json.Unmarshal([]byte(payload), &wsMsg); err != nil {
+			acked = append(acked, entry.ID)
+			continue
+		}
+
+		if err := rcm.localCM.SendMessage(userID, wsMsg); err != nil {
+			failuresDelta++
+			rcm.replayFails.Add(1)
+			span.RecordError(err)
+			log.Printf("Replay paused for user %s due to delivery error: %v", userID, err)
+			break
+		}
+
+		replayedDelta++
+		acked = append(acked, entry.ID)
+	}
+
+	if len(acked) > 0 {
+		if err := rcm.rdb.XDel(ctx, key, acked...).Err(); err != nil {
+			failuresDelta++
+			rcm.replayFails.Add(1)
+			span.RecordError(err)
+			log.Printf("Failed to ack replayed stream events for user %s: %v", userID, err)
+		}
+	}
+
+	totalReplayed := rcm.replayed.Add(uint64(replayedDelta))
+	totalFailures := rcm.replayFails.Load()
+	span.SetAttributes(
+		attribute.Int("stream.replayed.count", replayedDelta),
+		attribute.Int64("stream.replayed.total", int64(totalReplayed)),
+		attribute.Int("stream.replay.failures", failuresDelta),
+		attribute.Int64("stream.replay.failures.total", int64(totalFailures)),
+	)
+	if failuresDelta > 0 {
+		span.SetStatus(codes.Error, "replay completed with failures")
+	}
+	log.Printf("replayed count=%d total=%d replay failures=%d total_failures=%d user=%s stream=%s", replayedDelta, totalReplayed, failuresDelta, totalFailures, userID, key)
 }
 
 func (rcm *RedisConnectionManager) runUserSubscription(userID string, pubsub *redis.PubSub) {
@@ -210,7 +357,7 @@ func (rcm *RedisConnectionManager) BroadcastToRoom(roomID string, msg contracts.
 	return rcm.rdb.Publish(rcm.ctx, "room:"+roomID, b).Err()
 }
 
-// SendMessage delivers a message to all sockets of a user on this node.
+// SendMessage delivers a message to all sock ets of a user on this node.
 // If the user has no local connection, it falls back to publishing on their
 // Redis channel so another node can deliver it. This is the backward-compatible
 // API used by QueueConsumer and other system-notification paths.
@@ -225,7 +372,17 @@ func (rcm *RedisConnectionManager) SendMessage(userID string, msg contracts.WSMe
 		return err
 	}
 	log.Printf("Publishing to Redis channel for user %s", userID)
-	return rcm.rdb.Publish(rcm.ctx, "user:"+userID+":events", b).Err()
+	receivedBy, err := rcm.rdb.Publish(rcm.ctx, "user:"+userID+":events", b).Result()
+	if err != nil {
+		return err
+	}
+	if receivedBy == 0 {
+		if err := rcm.persistUserMessage(userID, msg); err != nil {
+			return err
+		}
+		log.Printf("No active subscriber for user %s; persisted message to stream", userID)
+	}
+	return nil
 }
 
 // Upgrade upgrades an HTTP connection to WebSocket.
@@ -246,7 +403,7 @@ func (rcm *RedisConnectionManager) SetTripChatPair(tripID, riderID, driverID str
 	if tripID == "" || riderID == "" || driverID == "" {
 		return fmt.Errorf("tripID, riderID and driverID are required")
 	}
-	pipe := rcm.rdb.TxPipeline()
+	pipe := rcm.rdb.TxPipeline() // pipe is not strictly necessary here but ensures atomicity of the two sets and keeps code cleaner. Not
 	pipe.Set(rcm.ctx, tripChatRiderKey(tripID), riderID, ttl)
 	pipe.Set(rcm.ctx, tripChatDriverKey(tripID), driverID, ttl)
 	_, err := pipe.Exec(rcm.ctx)

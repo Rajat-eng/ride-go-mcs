@@ -89,25 +89,54 @@ func (r *RabbitMQ) ConsumeMessages(queueName string, handler MessageHandler) err
 				if err != nil {
 					log.Printf("Message processing failed after %d retries for message ID: %s, err: %v", cfg.MaxRetries, d.MessageId, err)
 
-					// Add failure context before sending to the DLQ
+					// Add failure context before sending to the DLQ.
+					// We must republish explicitly because mutating delivery headers and rejecting
+					// does not persist those custom headers into the dead-lettered copy.
 					headers := amqp.Table{}
 					if d.Headers != nil {
 						headers = d.Headers
 					}
 
+					originExchange := d.Exchange
+					if originExchange == "" {
+						originExchange = TripExchange
+					}
+
 					headers["x-death-reason"] = err.Error()
-					headers["x-origin-exchange"] = d.Exchange
+					headers["x-origin-exchange"] = originExchange
 					headers["x-original-routing-key"] = d.RoutingKey
 					headers["x-retry-count"] = cfg.MaxRetries
-					d.Headers = headers
 
-					// Reject without requeue - message will go to the DLQ
-					_ = d.Reject(false)
+					dlqMsg := amqp.Publishing{
+						Headers:       headers,
+						DeliveryMode:  amqp.Persistent,
+						ContentType:   d.ContentType,
+						Body:          d.Body,
+						MessageId:     d.MessageId,
+						CorrelationId: d.CorrelationId,
+						Type:          d.Type,
+						Timestamp:     time.Now(),
+					}
+
+					if dlqMsg.ContentType == "" {
+						dlqMsg.ContentType = "application/json"
+					}
+
+					if pubErr := r.publish(ctx, DeadLetterExchange, d.RoutingKey, dlqMsg); pubErr != nil {
+						log.Printf("ERROR: Failed to republish failed message to DLQ, falling back to reject. message ID: %s, err: %v", d.MessageId, pubErr)
+						_ = d.Reject(false) // reject without requeueing, since we can't even get it to the DLQ
+						return err
+					}
+
+					if ackErr := d.Ack(false); ackErr != nil {
+						log.Printf("ERROR: Failed to Ack message after DLQ republish: %v. Message body: %s", ackErr, d.Body)
+					}
 					return err
 				}
 
 				// Only Ack if the handler succeeds
 				if ackErr := msg.Ack(false); ackErr != nil {
+					// Ack(false) means we're acknowledging this single message. If true it would acknowledge all messages up to and including this one.
 					log.Printf("ERROR: Failed to Ack message: %v. Message body: %s", ackErr, msg.Body)
 				}
 
@@ -128,7 +157,7 @@ func (r *RabbitMQ) PublishMessage(ctx context.Context, routingKey string, messag
 		return fmt.Errorf("failed to marshal message: %v", err)
 	}
 
-	log.Printf("Publishing message in queue: %v", string(jsonMsg))
+	log.Printf("Publishing message in queue %s for owner %s", routingKey, message.OwnerID)
 
 	msg := amqp.Publishing{
 		DeliveryMode: amqp.Persistent,

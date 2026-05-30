@@ -9,7 +9,6 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -39,84 +38,58 @@ func (c amqpHeadersCarrier) Keys() []string {
 
 // TracedPublisher wraps the RabbitMQ publish function with tracing
 func TracedPublisher(ctx context.Context, exchange, routingKey string, msg amqp.Publishing, publish func(context.Context, string, string, amqp.Publishing) error) error {
-	tracer := otel.GetTracerProvider().Tracer("rabbitmq")
-
-	// creating span for this tracer
-	ctx, span := tracer.Start(ctx, "rabbitmq.publish",
-		trace.WithAttributes(
-			attribute.String("messaging.destination", exchange),
-			attribute.String("messaging.routing_key", routingKey),
-		),
-	)
-	defer span.End()
-
-	// Try to extract and add message details to span (map[string]any if you don't know the type)
-	var msgBody contracts.AmqpMessage
-	if err := json.Unmarshal(msg.Body, &msgBody); err == nil {
-		if msgBody.OwnerID != "" {
+	return RunInSpan(ctx, "rabbitmq", "rabbitmq.publish", []attribute.KeyValue{
+		attribute.String("messaging.destination", exchange),
+		attribute.String("messaging.routing_key", routingKey),
+	}, func(ctx context.Context, span trace.Span) error {
+		// Try to extract and add message details to span (map[string]any if you don't know the type)
+		var msgBody contracts.AmqpMessage
+		if err := json.Unmarshal(msg.Body, &msgBody); err == nil && msgBody.OwnerID != "" {
 			span.SetAttributes(attribute.String("messaging.owner_id", msgBody.OwnerID))
 		}
-	}
 
-	// Inject trace context into message headers
-	if msg.Headers == nil {
-		msg.Headers = make(amqp.Table)
-	}
-	carrier := amqpHeadersCarrier(msg.Headers)
-	otel.GetTextMapPropagator().Inject(ctx, carrier)
-	msg.Headers = amqp.Table(carrier)
+		// Inject trace context into message headers
+		if msg.Headers == nil {
+			msg.Headers = make(amqp.Table)
+		}
+		carrier := amqpHeadersCarrier(msg.Headers)
+		otel.GetTextMapPropagator().Inject(ctx, carrier)
+		msg.Headers = amqp.Table(carrier)
 
-	if err := publish(ctx, exchange, routingKey, msg); err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
-
-	return nil
+		return publish(ctx, exchange, routingKey, msg)
+	})
 }
 
 // TracedConsumer wraps the RabbitMQ message handler with tracing
 func TracedConsumer(delivery amqp.Delivery, handler func(context.Context, amqp.Delivery) error) error {
-	// Extract trace context from message headers
+	// Extract trace context from message headers and wrap the handler in one reusable span helper.
 	carrier := amqpHeadersCarrier(delivery.Headers)
 	ctx := otel.GetTextMapPropagator().Extract(context.Background(), carrier)
-
-	tracer := otel.GetTracerProvider().Tracer("rabbitmq")
-
-	ctx, span := tracer.Start(ctx, "rabbitmq.consume",
-		trace.WithAttributes(
-			attribute.String("messaging.destination", delivery.Exchange),
-			attribute.String("messaging.routing_key", delivery.RoutingKey),
-		),
-	)
-	defer span.End()
-
-	// Try to extract and add message details to span (map[string]any if you don't know the type)
-	var msgBody contracts.AmqpMessage
-	if err := json.Unmarshal(delivery.Body, &msgBody); err == nil {
-		if msgBody.OwnerID != "" {
+	return RunInSpan(ctx, "rabbitmq", "rabbitmq.consume", []attribute.KeyValue{
+		attribute.String("messaging.destination", delivery.Exchange),
+		attribute.String("messaging.routing_key", delivery.RoutingKey),
+	}, func(ctx context.Context, span trace.Span) error {
+		// Try to extract and add message details to span (map[string]any if you don't know the type)
+		var msgBody contracts.AmqpMessage
+		if err := json.Unmarshal(delivery.Body, &msgBody); err == nil && msgBody.OwnerID != "" {
 			span.SetAttributes(attribute.String("messaging.owner_id", msgBody.OwnerID))
 		}
-	}
 
-	if err := handler(ctx, delivery); err != nil {
-		span.SetStatus(codes.Error, err.Error())
-		span.AddEvent("message.nack",
+		if err := handler(ctx, delivery); err != nil {
+			span.AddEvent("message.nack",
+				trace.WithAttributes(
+					attribute.String("error", err.Error()),
+					attribute.Bool("requeue", false),
+				),
+			)
+			return err
+		}
+
+		span.AddEvent("message.ack",
 			trace.WithAttributes(
-				// The code snippet `cfg := retry.DefaultConfig()` initializes a default configuration for retrying
-				// operations. It sets up parameters like initial delay, maximum retries, and backoff strategy.
-				attribute.String("error", err.Error()),
-				attribute.Bool("requeue", false),
+				attribute.String("message_id", delivery.MessageId),
 			),
 		)
-		return err
-	}
-
-	// Record ack as event
-	span.AddEvent("message.ack",
-		trace.WithAttributes(
-			attribute.String("message_id", delivery.MessageId),
-		),
-	)
-
-	return nil
+		return nil
+	})
 }

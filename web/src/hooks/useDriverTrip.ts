@@ -53,6 +53,28 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [sendMessage, dispatch]);
 
+  // Keep publishing the latest known location periodically so the driver
+  // re-registers as available even after WS reconnects while stationary.
+  useEffect(() => {
+    if (!locationReady) {
+      return;
+    }
+
+    const pushLocation = () => {
+      const gh = Geohash.encode(driverLocation.latitude, driverLocation.longitude, 7);
+      sendMessage({
+        type: TripEvents.DriverLocation,
+        data: { location: driverLocation, geohash: gh },
+      });
+    };
+
+    // Fire once immediately, then keep alive every few seconds.
+    pushLocation();
+    const intervalID = window.setInterval(pushLocation, 5000);
+
+    return () => window.clearInterval(intervalID);
+  }, [locationReady, driverLocation, sendMessage]);
+
   const handleAcceptTrip = useCallback(() => {
     if (!requestedTrip || !requestedTrip.id) {
       alert("No trip ID found");

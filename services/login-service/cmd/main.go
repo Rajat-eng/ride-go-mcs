@@ -79,10 +79,10 @@ func main() {
 
 	// HTTP health check server
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/health", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
-	})
+	}, "/health"))
 
 	httpServer := &http.Server{
 		Addr:    HttpAddr,

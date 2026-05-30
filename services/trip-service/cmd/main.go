@@ -88,11 +88,11 @@ func main() {
 	publisher := events.NewTripEventPublisher(rabbitmq)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle("/health", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Health check endpoint
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
-	})
+	}, "/health"))
 
 	lis, err := net.Listen("tcp", GrpcAddr)
 	if err != nil {

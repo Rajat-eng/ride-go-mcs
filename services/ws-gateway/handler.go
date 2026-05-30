@@ -14,6 +14,23 @@ import (
 	"github.com/google/uuid"
 )
 
+func startWsGateHeartbeat(userID string, rl *RateLimiter) func() {
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(20 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				rl.RefreshWsConnectionGate(context.Background(), userID)
+			case <-done:
+				return
+			}
+		}
+	}()
+	return func() { close(done) }
+}
+
 func handleRidersWebSocket(
 	w http.ResponseWriter,
 	r *http.Request,
@@ -38,6 +55,8 @@ func handleRidersWebSocket(
 		return
 	}
 	defer release()
+	stopHeartbeat := startWsGateHeartbeat(userID, rl)
+	defer stopHeartbeat()
 
 	connManager.Add(userID, socketID, conn)
 	defer connManager.Remove(socketID)
@@ -135,6 +154,8 @@ func handleDriversWebSocket(
 		return
 	}
 	defer release()
+	stopHeartbeat := startWsGateHeartbeat(userID, rl)
+	defer stopHeartbeat()
 
 	ctx := r.Context()
 

@@ -5,10 +5,13 @@ import (
 	"time"
 
 	"ride-sharing/services/chat-service/internal/domain"
+	"ride-sharing/shared/tracing"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const collectionName = "chat_messages"
@@ -47,8 +50,13 @@ func (r *MongoMessageRepository) Save(ctx context.Context, msg *domain.Message) 
 		"sentAt":    msg.SentAt,
 		"delivered": msg.Delivered,
 	}
-	_, err := r.col.InsertOne(ctx, doc)
-	return err
+	return tracing.RunInSpan(ctx, "db", "mongodb.chat_messages.insert", tracing.DBSpanAttrs("mongodb",
+		attribute.String("db.collection", collectionName),
+		attribute.String("trip.id", msg.TripID),
+	), func(ctx context.Context, _ trace.Span) error {
+		_, err := r.col.InsertOne(ctx, doc)
+		return err
+	})
 }
 
 func (r *MongoMessageRepository) GetByTripID(ctx context.Context, tripID string, limit int) ([]*domain.Message, error) {
@@ -59,42 +67,53 @@ func (r *MongoMessageRepository) GetByTripID(ctx context.Context, tripID string,
 		SetSort(bson.D{{Key: "sentAt", Value: -1}}).
 		SetLimit(int64(limit))
 
-	cursor, err := r.col.Find(ctx, bson.M{"tripID": tripID}, opts)
-	if err != nil {
-		return nil, err
-	}
-	defer cursor.Close(ctx)
-
 	var msgs []*domain.Message
-	for cursor.Next(ctx) {
-		var doc struct {
-			ID        string `bson:"_id"`
-			TripID    string `bson:"tripID"`
-			SenderID  string `bson:"senderID"`
-			Text      string `bson:"text"`
-			SentAt    int64  `bson:"sentAt"`
-			Delivered bool   `bson:"delivered"`
+	err := tracing.RunInSpan(ctx, "db", "mongodb.chat_messages.find_by_trip", tracing.DBSpanAttrs("mongodb",
+		attribute.String("db.collection", collectionName),
+		attribute.String("trip.id", tripID),
+	), func(ctx context.Context, _ trace.Span) error {
+		cursor, err := r.col.Find(ctx, bson.M{"tripID": tripID}, opts)
+		if err != nil {
+			return err
 		}
-		if err := cursor.Decode(&doc); err != nil {
-			continue
+		defer cursor.Close(ctx)
+
+		for cursor.Next(ctx) {
+			var doc struct {
+				ID        string `bson:"_id"`
+				TripID    string `bson:"tripID"`
+				SenderID  string `bson:"senderID"`
+				Text      string `bson:"text"`
+				SentAt    int64  `bson:"sentAt"`
+				Delivered bool   `bson:"delivered"`
+			}
+			if err := cursor.Decode(&doc); err != nil {
+				continue
+			}
+			msgs = append(msgs, &domain.Message{
+				ID:        doc.ID,
+				TripID:    doc.TripID,
+				SenderID:  doc.SenderID,
+				Text:      doc.Text,
+				SentAt:    doc.SentAt,
+				Delivered: doc.Delivered,
+			})
 		}
-		msgs = append(msgs, &domain.Message{
-			ID:        doc.ID,
-			TripID:    doc.TripID,
-			SenderID:  doc.SenderID,
-			Text:      doc.Text,
-			SentAt:    doc.SentAt,
-			Delivered: doc.Delivered,
-		})
-	}
-	return msgs, cursor.Err()
+		return cursor.Err()
+	})
+	return msgs, err
 }
 
 func (r *MongoMessageRepository) MarkDelivered(ctx context.Context, messageID string) error {
-	_, err := r.col.UpdateOne(
-		ctx,
-		bson.M{"_id": messageID},
-		bson.M{"$set": bson.M{"delivered": true}},
-	)
-	return err
+	return tracing.RunInSpan(ctx, "db", "mongodb.chat_messages.update_one", tracing.DBSpanAttrs("mongodb",
+		attribute.String("db.collection", collectionName),
+		attribute.String("message.id", messageID),
+	), func(ctx context.Context, _ trace.Span) error {
+		_, err := r.col.UpdateOne(
+			ctx,
+			bson.M{"_id": messageID},
+			bson.M{"$set": bson.M{"delivered": true}},
+		)
+		return err
+	})
 }

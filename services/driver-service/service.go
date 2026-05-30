@@ -55,11 +55,21 @@ func (s *Service) FindAvailableDrivers(packageType string, pickupLat, pickupLng 
 		return []string{}
 	}
 
-	ids := make([]string, len(results))
-	// notify nearby drivers of this incoming ride request so they can respond with accept/decline
-	// this is done by the api-gateway consuming from the same GEO index and pushing trip requests to drivers via WS
-	copy(ids, results)
-	return ids
+	// Keep only drivers that currently have at least one active ws-gateway subscriber.
+	// This avoids picking stale GEO entries for disconnected drivers.
+	onlineIDs := make([]string, 0, len(results))
+	for _, driverID := range results {
+		// pubnumSub gives the number of subscribers for the driver's event channel, which ws-gateway subscribes to when the driver is online.
+		numSub, err := s.rdb.PubSubNumSub(ctx, "user:"+driverID+":events").Result()
+		if err != nil {
+			continue
+		}
+		if count, ok := numSub["user:"+driverID+":events"]; ok && count > 0 {
+			onlineIDs = append(onlineIDs, driverID)
+		}
+	}
+
+	return onlineIDs
 }
 
 const activeRiderTTL = 2 * time.Hour
