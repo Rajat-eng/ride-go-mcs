@@ -1,0 +1,84 @@
+# Purpose: Runs the central OpenTelemetry collector gateway and exposes the in-cluster otel-collector service.
+# Gateway flow: Apps and the node agent send OTLP data here, the gateway also scrapes exporter targets,
+# then it forwards traces to Jaeger, logs to Loki, and exposes aggregated metrics on port 9464.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: "otel-collector-gateway"
+  template:
+    metadata:
+      labels:
+        app: "otel-collector-gateway"
+    spec:
+      containers:
+        - name: otel-collector-gateway
+          image: otel/opentelemetry-collector-contrib:0.102.1
+          args:
+            - --config=/etc/otelcol/collector-gateway.yaml
+          ports:
+            - name: metrics
+              containerPort: 9464
+            - name: health
+              containerPort: 13133
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+            - name: jaeger-http
+              containerPort: 14268
+          resources:
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: otel-collector-gateway-config
+              mountPath: /etc/otelcol
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 10
+            periodSeconds: 15
+      volumes:
+        - name: otel-collector-gateway-config
+          configMap:
+            name: otel-collector-gateway-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+spec:
+  selector:
+    app: "otel-collector-gateway"
+  ports:
+    - name: metrics # Exposes the aggregated metrics from the gateway for scraping by Prometheus.
+      port: 9464
+      targetPort: 9464
+    - name: health # Exposes the health endpoint for readiness and liveness probes.
+      port: 13133
+      targetPort: 13133
+    - name: otlp-grpc # Exposes the OTLP gRPC endpoint for trace and metric ingestion.  
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http # Exposes the OTLP HTTP endpoint for trace and metric ingestion.
+      port: 4318
+      targetPort: 4318
+    - name: jaeger-http # Exposes the Jaeger HTTP endpoint for trace ingestion from Jaeger clients.
+      port: 14268
+      targetPort: 14268
+  type: ClusterIP

@@ -33,15 +33,21 @@ func main() {
 		ServiceName:    "ws-gateway",
 		Environment:    env.GetString("ENVIRONMENT", "development"),
 		JaegerEndpoint: env.GetString("JAEGER_ENDPOINT", "http://jaeger:14268/api/traces"),
+		OTLPEndpoint:   env.GetString("OTEL_EXPORTER_OTLP_ENDPOINT", "otel-collector:4317"),
 	}
 	sh, err := tracing.InitTracer(tracerCfg)
 	if err != nil {
 		log.Fatalf("Failed to initialize tracer: %v", err)
 	}
+	msh, err := tracing.InitMeter(tracerCfg)
+	if err != nil {
+		log.Fatalf("Failed to initialize meter provider: %v", err)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	defer sh(ctx)
+	defer msh(ctx)
 
 	rabbitmq, err := messaging.NewRabbitMQ(rabbitMqURI)
 	if err != nil {

@@ -465,3 +465,38 @@ func (rcm *RedisConnectionManager) ClearTripChatPair(tripID string) error {
 	_, err = pipe.Exec(rcm.ctx)
 	return err
 }
+
+// GetActiveDriver returns the current driver mapped to a rider, if present.
+// It returns ("", nil) when no mapping exists.
+func (rcm *RedisConnectionManager) GetActiveDriver(riderID string) (string, error) {
+	if riderID == "" {
+		return "", fmt.Errorf("riderID is required")
+	}
+	driverID, err := rcm.rdb.Get(rcm.ctx, activeDriverKey(riderID)).Result()
+	if err == redis.Nil {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return driverID, nil
+}
+
+// LeaveUserFromRoom removes all local sockets of userID from roomID.
+// This is best-effort cleanup to avoid stale room subscriptions after terminal events.
+func (rcm *RedisConnectionManager) LeaveUserFromRoom(userID, roomID string) {
+	if userID == "" || roomID == "" {
+		return
+	}
+
+	rcm.localCM.mu.RLock()
+	socketIDs := make([]string, 0, len(rcm.localCM.byUser[userID]))
+	for socketID := range rcm.localCM.byUser[userID] {
+		socketIDs = append(socketIDs, socketID)
+	}
+	rcm.localCM.mu.RUnlock()
+
+	for _, socketID := range socketIDs {
+		rcm.LeaveRoom(socketID, roomID)
+	}
+}

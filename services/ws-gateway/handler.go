@@ -14,6 +14,8 @@ import (
 	"github.com/google/uuid"
 )
 
+const wsPongWait = 45 * time.Second
+
 func startWsGateHeartbeat(userID string, rl *RateLimiter) func() {
 	done := make(chan struct{})
 	go func() {
@@ -60,6 +62,11 @@ func handleRidersWebSocket(
 
 	connManager.Add(userID, socketID, conn)
 	defer connManager.Remove(socketID)
+
+	_ = conn.SetReadDeadline(time.Now().Add(wsPongWait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(wsPongWait))
+	})
 
 	for {
 		_, message, err := conn.ReadMessage()
@@ -160,6 +167,12 @@ func handleDriversWebSocket(
 	ctx := r.Context()
 
 	connManager.Add(userID, socketID, conn)
+
+	_ = conn.SetReadDeadline(time.Now().Add(wsPongWait))
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(wsPongWait))
+	})
+
 	defer func() {
 		connManager.Remove(socketID)
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

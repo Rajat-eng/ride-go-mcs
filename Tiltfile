@@ -4,7 +4,7 @@ load('ext://restart_process', 'docker_build_with_restart')
 
 # Uncomment to use secrets
 k8s_yaml('./infra/development/k8s/secrets.yaml')
-k8s_yaml('./infra/development/k8s/app-config.yaml')
+k8s_yaml('./infra/development/k8s/app-config-configmap.yml')
 
 ### End of K8s Config ###
 
@@ -17,6 +17,77 @@ k8s_resource('rabbitmq', port_forwards=['5672', '15672'], labels='tooling')
 k8s_yaml('./infra/development/k8s/redis-deployment.yaml')
 k8s_resource('redis', port_forwards=6379, labels='tooling')
 ### End Redis ###
+
+### Postgres ###
+k8s_yaml('./infra/development/k8s/postgres-deployment.yaml')
+k8s_resource('postgres', port_forwards=5432, labels='tooling')
+### End Postgres ###
+
+### Observability ###
+k8s_yaml('./infra/development/k8s/observability/jaeger-deployment.yaml')
+k8s_yaml('./infra/development/k8s/observability/tracing-backend-service.yml')
+k8s_yaml('./infra/development/k8s/observability/blackbox-exporter-config.yaml')
+k8s_yaml('./infra/development/k8s/observability/blackbox-exporter.yaml')
+k8s_yaml('./infra/development/k8s/observability/redis-exporter.yaml')
+k8s_yaml('./infra/development/k8s/observability/loki-config.yaml')
+k8s_yaml('./infra/development/k8s/observability/loki-statefulset.yaml')
+k8s_yaml('./infra/development/k8s/observability/otel-gateway-configmap.yaml')
+k8s_yaml('./infra/development/k8s/observability/collector-gateway-deployment.yaml')
+k8s_yaml('./infra/development/k8s/observability/otel-agent-configmap.yaml')
+k8s_yaml('./infra/development/k8s/observability/collector-agent-daemonset.yaml')
+k8s_yaml('./infra/development/k8s/observability/prometheus-config.yaml')
+k8s_yaml('./infra/development/k8s/observability/prometheus-deployment.yaml')
+k8s_yaml('./infra/development/k8s/observability/grafana-datasources.yaml')
+k8s_yaml('./infra/development/k8s/observability/grafana.yaml')
+
+k8s_resource(
+  'jaeger',
+  port_forwards=['16686:16686', '14268:14268'],
+  resource_deps=['rabbitmq', 'redis', 'postgres'],
+  labels='tooling',
+)
+k8s_resource(
+  'loki',
+  port_forwards='3100:3100',
+  resource_deps=['rabbitmq', 'redis', 'postgres'],
+  labels='tooling',
+)
+k8s_resource(
+  'otel-collector-gateway',
+  port_forwards=['4317:4317', '4318:4318', '9464:9464'],
+  resource_deps=['jaeger', 'loki', 'rabbitmq', 'redis'],
+  labels='tooling',
+)
+k8s_resource(
+  'otel-collector-agent',
+  resource_deps=['otel-collector-gateway'],
+  labels='tooling',
+)
+k8s_resource(
+  'blackbox-exporter',
+  port_forwards='9115:9115',
+  resource_deps=['otel-collector-gateway'],
+  labels='tooling',
+)
+k8s_resource(
+  'redis-exporter',
+  port_forwards='9121:9121',
+  resource_deps=['redis'],
+  labels='tooling',
+)
+k8s_resource(
+  'prometheus',
+  port_forwards='9090:9090',
+  resource_deps=['otel-collector-gateway'],
+  labels='tooling',
+)
+k8s_resource(
+  'grafana',
+  port_forwards='3001:3000',
+  resource_deps=['prometheus', 'loki', 'jaeger'],
+  labels='tooling',
+)
+### End Observability ###
 
 ### API Gateway ###
 
@@ -291,31 +362,5 @@ k8s_resource('chat-service', resource_deps=['chat-service-compile', 'rabbitmq'],
 
 ### End of Chat Service ###
 
-### Jaeger ###
-k8s_yaml('./infra/development/k8s/jaeger.yaml')
-k8s_resource(
-  'jaeger',
-  port_forwards=['16686:16686', '14268:14268'],
-  resource_deps=[
-    'rabbitmq',
-    'redis',
-    'postgres',
-    'api-gateway',
-    'trip-service',
-    'login-service',
-    'driver-service',
-    'dlq-worker',
-    'web',
-    'payment-service',
-    'ws-gateway',
-    'chat-service',
-  ],
-  labels="tooling",
-)
-### End of Jaeger ###
-
-
-###Postges ###
-k8s_yaml('./infra/development/k8s/postgres-deployment.yaml')  
-k8s_resource('postgres', port_forwards=5432, labels='tooling')
+### End of Services ###
 ### End of Postgres ###

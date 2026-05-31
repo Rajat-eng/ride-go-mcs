@@ -1,0 +1,123 @@
+# Purpose: Defines the central collector gateway receivers, processors, exporters, and scrape jobs.
+# Gateway flow: This is the core routing config. It receives OTLP and Jaeger data, scrapes RabbitMQ,
+# Redis exporter, and blackbox targets, then sends traces to Jaeger, logs to Loki, and exposes metrics for Prometheus.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-gateway-config
+data:
+  collector-gateway.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+
+      jaeger:
+        protocols:
+          thrift_http:
+            endpoint: 0.0.0.0:14268
+
+      prometheus:
+        config:
+          global:
+            scrape_interval: 15s
+            scrape_timeout: 10s
+          scrape_configs:
+            - job_name: rabbitmq
+              static_configs:
+                - targets: ["rabbitmq:15692"]
+
+            - job_name: redis-exporter
+              static_configs:
+                - targets: ["redis-exporter:9121"]
+
+            - job_name: blackbox-http
+              metrics_path: /probe
+              params:
+                module: [http_2xx]
+              static_configs:
+                - targets:
+                    - http://api-gateway:8081/
+                    - http://ws-gateway:8082/
+                    - http://login-service:8085/
+                    - http://web:3000/
+              relabel_configs:
+                - source_labels: [__address__]
+                  target_label: __param_target
+                - source_labels: [__param_target]
+                  target_label: instance
+                - target_label: __address__
+                  replacement: blackbox-exporter:9115
+
+            - job_name: blackbox-tcp
+              metrics_path: /probe
+              params:
+                module: [tcp_connect]
+              static_configs:
+                - targets:
+                    - trip-service:9093
+                    - driver-service:9092
+                    - payment-service:9004
+                    - redis:6379
+                    - rabbitmq:5672
+              relabel_configs:
+                - source_labels: [__address__]
+                  target_label: __param_target
+                - source_labels: [__param_target]
+                  target_label: instance
+                - target_label: __address__
+                  replacement: blackbox-exporter:9115
+
+    processors:
+      resource:
+        attributes:
+          - key: deployment.environment
+            value: development
+            action: upsert
+      memory_limiter:
+        check_interval: 5s
+        limit_mib: 256
+        spike_limit_mib: 64
+      batch:
+        send_batch_size: 1024
+        timeout: 5s
+
+    exporters:
+      prometheus:
+        endpoint: 0.0.0.0:9464
+
+      otlp/jaeger:
+        endpoint: jaeger:4317
+        tls:
+          insecure: true
+
+      loki:
+        endpoint: http://loki:3100/loki/api/v1/push
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    service:
+      extensions: [health_check]
+      telemetry:
+        logs:
+          level: info
+      pipelines:
+        metrics:
+          receivers: [prometheus, otlp]
+          processors: [resource, memory_limiter, batch]
+          exporters: [prometheus]
+
+        traces:
+          receivers: [otlp, jaeger]
+          processors: [resource, memory_limiter, batch]
+          exporters: [otlp/jaeger]
+
+        logs:
+          receivers: [otlp]
+          processors: [resource, memory_limiter, batch]
+          exporters: [loki]

@@ -1,0 +1,42 @@
+# Purpose: Runs one OpenTelemetry agent per node to collect container log files from /var/log/pods.
+# Gateway flow: The agent batches pod logs and exports them over OTLP gRPC to otel-collector:4317,
+# which is the central collector gateway service.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: otel-collector-agent
+spec:
+  selector:
+    matchLabels:
+      app: "otel-collector-agent"
+  template:
+    metadata:
+      labels:
+        app: "otel-collector-agent"
+    spec:
+      containers:
+        - name: otel-collector-agent
+          image: otel/opentelemetry-collector-contrib:0.102.1
+          args:
+            - --config=/etc/otelcol/collector-agent.yaml
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: otel-collector-agent-config
+              mountPath: /etc/otelcol
+            - name: varlogpods
+              mountPath: /var/log/pods
+              readOnly: true
+      volumes:
+        - name: otel-collector-agent-config
+          configMap:
+            name: otel-collector-agent-config
+        - name: varlogpods
+          hostPath:
+            path: /var/log/pods
+            type: DirectoryOrCreate

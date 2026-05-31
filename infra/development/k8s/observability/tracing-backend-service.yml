@@ -1,0 +1,24 @@
+# Purpose: Exposes the Jaeger deployment behind a stable in-cluster service name and ports.
+# Gateway flow: The collector gateway uses this service endpoint to export traces to Jaeger,
+# so it is the stable network target for the gateway trace exporter.
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger
+spec:
+  selector:
+    app: jaeger
+  ports:
+    - name: ui
+      port: 16686
+      targetPort: 16686
+    - name: collector
+      port: 14268
+      targetPort: 14268
+    - name: otlp-grpc
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      port: 4318
+      targetPort: 4318
+  type: ClusterIP

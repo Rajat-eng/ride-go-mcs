@@ -39,6 +39,16 @@ func (c *cancelConsumer) Start() error {
 			return nil
 		}
 
+		driverID := payload.DriverID
+		if driverID == "" {
+			resolvedDriverID, err := c.connManager.GetActiveDriver(payload.RiderID)
+			if err != nil {
+				log.Printf("cancelConsumer: failed to resolve active driver for rider %s: %v", payload.RiderID, err)
+			} else {
+				driverID = resolvedDriverID
+			}
+		}
+
 		wsMsg := contracts.WSMessage{
 			Type:  contracts.TripEventCancelled,
 			Topic: "trip:" + payload.TripID,
@@ -54,19 +64,30 @@ func (c *cancelConsumer) Start() error {
 			// non-fatal — continue to notify sockets
 		}
 
+		// Force local room cleanup for both participants so stale channels are closed
+		// even when clients don't send explicit unsubscribe messages.
+		tripRoomID := "trip:" + payload.TripID
+		chatRoomID := tripRoomID + ":chat"
+		c.connManager.LeaveUserFromRoom(payload.RiderID, tripRoomID)
+		c.connManager.LeaveUserFromRoom(payload.RiderID, chatRoomID)
+		if driverID != "" {
+			c.connManager.LeaveUserFromRoom(driverID, tripRoomID)
+			c.connManager.LeaveUserFromRoom(driverID, chatRoomID)
+		}
+
 		// Notify rider
 		if err := c.connManager.SendMessage(payload.RiderID, wsMsg); err != nil {
 			log.Printf("cancelConsumer: failed to notify rider %s: %v", payload.RiderID, err)
 		}
 
 		// Notify driver if one was assigned
-		if payload.DriverID != "" {
-			if err := c.connManager.SendMessage(payload.DriverID, wsMsg); err != nil {
-				log.Printf("cancelConsumer: failed to notify driver %s: %v", payload.DriverID, err)
+		if driverID != "" {
+			if err := c.connManager.SendMessage(driverID, wsMsg); err != nil {
+				log.Printf("cancelConsumer: failed to notify driver %s: %v", driverID, err)
 			}
 		}
 
-		log.Printf("cancelConsumer: trip %s cancelled — notified rider %s driver %s", payload.TripID, payload.RiderID, payload.DriverID)
+		log.Printf("cancelConsumer: trip %s cancelled — notified rider %s driver %s", payload.TripID, payload.RiderID, driverID)
 		return nil
 	})
 }

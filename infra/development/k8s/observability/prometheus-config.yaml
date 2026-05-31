@@ -1,0 +1,124 @@
+# Purpose: Defines Prometheus scrape targets and alert rules for the observability stack.
+# Gateway flow: Prometheus does not send data to the gateway. It scrapes the gateway's metrics endpoint
+# at otel-collector:9464, so this file describes how Prometheus reads metrics emitted by the gateway.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    rule_files:
+      - /etc/prometheus/alerts.yml
+
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets: ["localhost:9090"]
+
+      - job_name: otel-collector
+        static_configs:
+          - targets: ["otel-collector:9464"]
+
+  alerts.yml: |
+    groups:
+      - name: service-health
+        rules:
+          - alert: ServiceEndpointDown
+            expr: probe_success == 0
+            for: 2m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Service endpoint probe failing"
+              description: "Probe failed for {{ $labels.instance }} (job={{ $labels.job }})"
+
+          - alert: WsGatewayDown
+            expr: probe_success{instance="http://ws-gateway:8082/"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "ws-gateway health endpoint is down"
+              description: "ws-gateway health probe has been failing for more than 2 minutes"
+
+          - alert: ApiGatewayDown
+            expr: probe_success{instance="http://api-gateway:8081/"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "api-gateway health endpoint is down"
+              description: "api-gateway health probe has been failing for more than 2 minutes"
+
+      - name: rabbitmq-alerts
+        rules:
+          - alert: RabbitMQQueueBacklogHigh
+            expr: rabbitmq_queue_messages_ready > 100
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "RabbitMQ queue backlog is high"
+              description: "Queue {{ $labels.queue }} has {{ $value }} ready messages"
+
+          - alert: RabbitMQUnackedHigh
+            expr: rabbitmq_queue_messages_unacked > 100
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "RabbitMQ unacked messages are high"
+              description: "Queue {{ $labels.queue }} has {{ $value }} unacked messages"
+
+          - alert: RabbitMQConsumerMissing
+            expr: rabbitmq_queue_consumers == 0 and rabbitmq_queue_messages_ready > 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "RabbitMQ queue has backlog but no consumers"
+              description: "Queue {{ $labels.queue }} has messages but no active consumers"
+
+      - name: redis-alerts
+        rules:
+          - alert: RedisDown
+            expr: redis_up == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Redis exporter cannot reach Redis"
+              description: "redis_up is 0 for {{ $labels.instance }}"
+
+          - alert: RedisMemoryHigh
+            expr: (redis_memory_used_bytes / redis_config_maxmemory) > 0.85 and redis_config_maxmemory > 0
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Redis memory usage is high"
+              description: "Redis memory usage is above 85%"
+
+      - name: infra-exporters
+        rules:
+          - alert: OTelCollectorDown
+            expr: up{job="otel-collector"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: "OTel Collector is down"
+              description: "Prometheus cannot scrape OTel Collector"
+
+          - alert: CollectorTargetScrapeFailures
+            expr: sum by (job) (up{job=~"otel-collector|prometheus"} == 0) > 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "Scrape failures detected"
+              description: "One or more critical scrape targets are failing"

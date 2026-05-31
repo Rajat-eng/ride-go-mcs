@@ -97,8 +97,14 @@ func (cm *ConnectionManager) SendToSocket(socketID string, msg contracts.WSMessa
 		return ErrConnectionNotFound
 	}
 	rec.mu.Lock()
-	defer rec.mu.Unlock()
-	return rec.conn.WriteJSON(msg)
+	err := rec.conn.WriteJSON(msg)
+	rec.mu.Unlock()
+	if err != nil {
+		// Best-effort stale socket cleanup so reconnecting users are not blocked by dead entries.
+		_ = rec.conn.Close()
+		cm.Remove(socketID)
+	}
+	return err
 }
 
 // SendMessage delivers a message to every socket owned by userID.

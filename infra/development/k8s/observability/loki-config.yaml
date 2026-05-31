@@ -1,0 +1,37 @@
+# Purpose: Defines Loki storage and API behavior for log ingestion and querying.
+# Gateway flow: This file does not send data itself. The collector gateway pushes logs to Loki's HTTP ingest API,
+# and this config controls how Loki accepts and stores that log data.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-config
+data:
+  loki.yaml: |
+    auth_enabled: false
+
+    server:
+      http_listen_port: 3100
+
+    common:
+      path_prefix: /loki
+      replication_factor: 1
+      ring:
+        kvstore:
+          store: inmemory
+
+    schema_config:
+      configs:
+        - from: 2024-01-01
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index:
+            prefix: index_
+            period: 24h
+
+    storage_config:
+      filesystem:
+        directory: /loki/chunks
+
+    ruler:
+      alertmanager_url: http://alertmanager:9093

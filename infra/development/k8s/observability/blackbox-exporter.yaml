@@ -1,0 +1,51 @@
+# Purpose: Runs the blackbox exporter and exposes its /probe endpoint inside the cluster.
+# Gateway flow: The collector gateway scrapes this service through its Prometheus receiver relabel rules,
+# so blackbox metrics flow from this pod into the gateway and then out through the gateway metrics pipeline.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blackbox-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blackbox-exporter
+  template:
+    metadata:
+      labels:
+        app: blackbox-exporter
+    spec:
+      containers:
+        - name: blackbox-exporter
+          image: prom/blackbox-exporter:v0.25.0
+          args:
+            - --config.file=/etc/blackbox/blackbox.yml
+          ports:
+            - containerPort: 9115
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "250m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: blackbox-config
+              mountPath: /etc/blackbox
+      volumes:
+        - name: blackbox-config
+          configMap:
+            name: blackbox-exporter-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: blackbox-exporter
+spec:
+  selector:
+    app: blackbox-exporter
+  ports:
+    - name: http
+      port: 9115
+      targetPort: 9115
+  type: ClusterIP

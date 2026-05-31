@@ -17,6 +17,7 @@ type Config struct {
 	ServiceName    string
 	Environment    string
 	JaegerEndpoint string
+	OTLPEndpoint   string
 }
 
 func InitTracer(cfg Config) (func(context.Context) error, error) {
@@ -57,12 +58,7 @@ func newPropagator() propagation.TextMapPropagator {
 }
 
 func newTraceProvider(cfg Config, exporter sdktrace.SpanExporter) (*sdktrace.TracerProvider, error) {
-	res, err := resource.New(context.Background(),
-		resource.WithAttributes(
-			semconv.ServiceNameKey.String(cfg.ServiceName),
-			semconv.DeploymentEnvironmentKey.String(cfg.Environment),
-		),
-	)
+	res, err := newResource(cfg)
 	// no use of stdout bcoz it will simply throw logs . we want spans to move to exporter with service name and deployed env
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
@@ -75,4 +71,13 @@ func newTraceProvider(cfg Config, exporter sdktrace.SpanExporter) (*sdktrace.Tra
 	)
 
 	return traceProvider, nil
+}
+
+func newResource(cfg Config) (*resource.Resource, error) {
+	return resource.New(context.Background(),
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String(cfg.ServiceName),
+			semconv.DeploymentEnvironmentKey.String(cfg.Environment),
+		),
+	)
 }

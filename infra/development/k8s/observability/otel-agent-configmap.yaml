@@ -1,0 +1,37 @@
+# Purpose: Configures the node-level OpenTelemetry agent to read pod log files and batch them safely.
+# Gateway flow: The configured OTLP exporter sends those logs directly to otel-collector:4317,
+# which makes this file the log shipping config for the path into the collector gateway.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-agent-config
+data:
+  collector-agent.yaml: |
+    receivers:
+      filelog:
+        include:
+          - /var/log/pods/*/*/*.log
+        start_at: end
+        include_file_path: true
+
+    processors:
+      batch:
+        send_batch_size: 1024
+        timeout: 5s
+      memory_limiter:
+        check_interval: 5s
+        limit_mib: 128
+        spike_limit_mib: 32
+
+    exporters:
+      otlp:
+        endpoint: otel-collector:4317
+        tls:
+          insecure: true
+
+    service:
+      pipelines:
+        logs:
+          receivers: [filelog]
+          processors: [memory_limiter, batch]
+          exporters: [otlp]

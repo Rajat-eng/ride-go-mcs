@@ -1,0 +1,19 @@
+# it probes the health of the collector gateway and exposes aggregated metrics for scraping by Prometheus, 
+# it also exposes OTLP endpoints(4317 gRPC and 4318 HTTP) for trace and metric ingestion from apps and the node agent
+# These ports are also used for forwarding data to Jaeger and Loki, and for the gateway's own health checks.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blackbox-exporter-config
+data:
+  blackbox.yml: |
+    modules:
+      http_2xx:
+        prober: http
+        timeout: 5s
+        http:
+          valid_status_codes: []
+          method: GET
+      tcp_connect:
+        prober: tcp
+        timeout: 5s

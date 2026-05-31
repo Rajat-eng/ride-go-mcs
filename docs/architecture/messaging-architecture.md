@@ -15,6 +15,7 @@
 4. [WebSocket Layer](#websocket-layer)
 5. [RabbitMQ Layer](#rabbitmq-layer)
 6. [Redis Layer](#redis-layer)
+  - [Redis Streams (Definition & Usage)](#redis-streams-definition--usage)
 7. [RedisConnectionManager (RCM)](#redisconnectionmanager-rcm)
 8. [Complete Data Flows](#complete-data-flows)
    - [Trip Creation](#flow-1-trip-creation)
@@ -331,6 +332,7 @@ Every message body (regardless of routing key) is a JSON-serialised `AmqpMessage
 | Key pattern | Type | TTL | Purpose |
 |---|---|---|---|
 | `user:<userID>:events` | Pub/Sub channel | — | Cross-pod WS delivery |
+| `user:<userID>:stream` | Redis Stream | 2 h | Offline event inbox for user-directed WS messages |
 | `trip:<tripID>:chat:rider` | String | 2 h | Rider userID for chat authorisation |
 | `trip:<tripID>:chat:driver` | String | 2 h | Driver userID for chat authorisation |
 | `driver:<driverID>:active_rider` | String | — | Active rider linked to a driver (used for location relay) |
@@ -347,6 +349,19 @@ Populated via `JoinRoom(socketID, roomID)` called from:
 
 - Frontend `ws.room.join` frame (preferred)
 - Frontend `ws.topic.subscribe` frame (legacy alias that maps to `JoinRoom`)
+
+### Redis Streams (Definition & Usage)
+
+**Definition:** Redis Streams is an append-only log data structure (`XADD`, `XRANGE`, `XDEL`) that can persist ordered events for later replay.
+
+In this system, Streams are used as a **fallback inbox** for user-directed WS events when no socket subscriber is currently online:
+
+1. `connManager.SendMessage(userID, msg)` first tries local socket delivery.
+2. If not local, it publishes to `user:<userID>:events` (Redis Pub/Sub).
+3. If Pub/Sub has zero subscribers, ws-gateway appends the event to `user:<userID>:stream`.
+4. On the next socket connect (`rcm.Add`), ws-gateway replays pending stream entries to that user and deletes acknowledged entries.
+
+This prevents message loss during short disconnects, pod restarts, or reconnect races.
 
 ---
 
@@ -957,6 +972,33 @@ connManager.BroadcastToRoom(roomID, msg)
        fan-out to that pod's local sockets in the room
 ```
 
+#### 3. User Stream Replay (offline fallback)
+
+When no pod has an active subscriber for `user:<userID>:events`, ws-gateway stores the message in `user:<userID>:stream` for replay.
+
+```
+connManager.SendMessage(userID, msg)
+  │
+  ├─ localCM.SendMessage(userID, msg)
+  │    └─ not found locally
+  │
+  ├─ rdb.Publish("user:<userID>:events", msg)
+  │    └─ subscribers == 0
+  │
+  └─ XADD user:<userID>:stream payload=msg   (TTL + max length)
+
+Later, on Add(userID, socketID, conn):
+  │
+  ├─ XRANGE user:<userID>:stream - +
+  ├─ localCM.SendMessage(userID, msg) for each entry
+  └─ XDEL acknowledged entry IDs
+```
+
+Operational limits currently used:
+
+- Stream key TTL: 2 hours
+- Approximate max length: 500 entries per user stream
+
 ---
 
 ### Socket Lifecycle
@@ -973,6 +1015,7 @@ Client connects (HTTP Upgrade)
               └─ if first socket for this user on this pod:
                    rdb.Subscribe("user:<userID>:events") ← subscribe Redis channel
                    go runUserSubscription(userID, pubsub) ← delivery goroutine starts
+                    go replayUserStream(userID)            ← flush offline stream backlog
 
 
 Client joins room (ws.room.join or ws.topic.subscribe)
@@ -1010,6 +1053,22 @@ Client disconnects
 A single user may have multiple WebSocket connections (e.g. two browser tabs). The RCM subscribes to `user:<userID>:events` **once** per pod, regardless of how many sockets that user has. When a message arrives on the channel, `localCM.SendMessage` fans it out to **all** of that user's sockets on this pod.
 
 This avoids duplicate Redis subscriptions and duplicate message delivery for multi-tab users.
+
+### User ↔ Socket Mapping
+
+`ConnectionManager` keeps a bi-directional in-memory index:
+
+```
+bySocket: map[socketID] -> { conn, userID }
+byUser:   map[userID]   -> set[socketID]
+```
+
+Implications:
+
+1. One user can have multiple active sockets (multi-tab / multi-device).
+2. User-directed messages fan out to all sockets in `byUser[userID]`.
+3. On socket close, only that `socketID` is removed; user subscription remains until the last socket is gone.
+4. Because this map is process memory, pod restarts clear it; Redis Pub/Sub + Streams bridge that gap across reconnect.
 
 ---
 
