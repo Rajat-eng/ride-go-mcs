@@ -12,6 +12,15 @@ spec:
       labels:
         app: chat-service
     spec:
+      initContainers:
+        - name: wait-for-dependencies
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z rabbitmq 5672; do echo "waiting for rabbitmq:5672"; sleep 2; done
+              until nc -z otel-collector 4317; do echo "waiting for otel-collector:4317"; sleep 2; done
       containers:
         - name: chat-service
           image: ride-sharing/chat-service
@@ -35,8 +44,8 @@ spec:
                   key: uri
             - name: MONGO_DB
               value: "chat"
-            - name: JAEGER_ENDPOINT
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
               valueFrom:
                 configMapKeyRef:
-                  key: JAEGER_ENDPOINT
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
                   name: app-config

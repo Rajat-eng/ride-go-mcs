@@ -91,10 +91,11 @@ The sole WebSocket server. All real-time communication between the frontend and 
 **Key responsibilities:**
 - Upgrades HTTP connections on `/ws/riders` and `/ws/drivers` after JWT validation.
 - Runs one **global RabbitMQ consumer per notification queue** at startup — not per connection. Each consumer reads events and routes them to the correct socket via the [RedisConnectionManager](#redisconnectionmanager-rcm).
-- Relays in-trip chat frames between rider and driver sockets using `ResolveTripChatPeer` (Redis KV lookup) and `connManager.SendMessage`.
 - Relays in-trip chat frames between rider and driver sockets using `ResolveTripChatPeer` (Redis KV lookup) and `connManager.BroadcastToRoom` on `trip:<tripID>:chat`.
 - Forwards driver commands (`trip_accept`, `trip_decline`, `location`) as AMQP messages to the `trip` exchange.
 - Enforces a per-user connection limit (max 3 simultaneous WebSocket connections) via a Redis-backed counter with `WsConnectionGate`.
+- Maintains connection liveness with server-side Ping/Pong (`wsPingPeriod=20s`, `wsPongWait=45s`) to proactively clean up dead sockets.
+- Uses a reconnect grace period (`driverReconnectGracePeriod=2s`) before unregistering a disconnected driver, preventing refresh races.
 - Supports the **room model** for chat (`ws.room.join` / `ws.room.leave`) and the legacy **topic model** (`ws.topic.subscribe` / `ws.topic.unsubscribe`) for backwards compatibility.
 
 **Global consumers started at boot:**
@@ -268,6 +269,84 @@ Every WebSocket frame (both directions) is a JSON object:
 - `type` — identifies the event/command (see `TripEvents` enum in `web/src/contracts.ts`)
 - `topic` — optional scope tag (e.g. `trip:abc123`). Absent on system/broadcast messages.
 - `data` — event-specific payload
+
+### Connection Health, Refresh, and Dead Socket Handling
+
+The gateway treats every browser refresh as a short reconnect race and handles it in three layers:
+
+1. **Socket liveness (Ping/Pong):**
+   - Server sets `read deadline = now + 45s`.
+   - Server sends Ping every `20s`.
+   - Client Pong extends read deadline.
+   - If no Pong arrives before deadline, read loop exits and socket is removed.
+
+2. **Connection gate heartbeat (Redis):**
+   - `WsConnectionGate` limits each user to `3` concurrent sockets.
+   - Key TTL is refreshed every `20s` while socket is active.
+   - On disconnect, gate counter is decremented.
+
+3. **Driver refresh race protection:**
+   - On driver socket close, gateway removes the socket first.
+   - If another socket for same user already exists, unregister is skipped.
+   - If none exists, gateway waits `2s` grace and checks again.
+   - Only then it calls `UnregisterDriver`.
+
+This prevents an old socket from unregistering a driver during a normal page refresh when the new socket arrives milliseconds later.
+
+**Observed refresh timeline example (driver):**
+
+```text
+12:20:48 Driver WS read error: websocket: close 1001 (going away)
+12:20:48 Removed socket <old-socket> (user <driverID>)
+12:20:49 Added socket <new-socket> for user <driverID>
+12:20:49 Skipping driver unregister for <driverID>: reconnected within grace period
+```
+
+### Subscriptions, Rooms, Channels, and Streams
+
+The system separates **delivery scope** from **transport channel**:
+
+| Layer | Identifier | Purpose |
+|---|---|---|
+| WS scope tag | `topic: trip:<tripID>` | Client-side trip correlation for owner-directed events |
+| WS room | `roomID: trip:<tripID>:chat` | Real-time chat broadcast to all sockets in room |
+| Redis user channel | `user:<userID>:events` | Cross-pod fan-out for user-targeted WS messages |
+| Redis room channel | `room:<roomID>` | Cross-pod fan-out for room broadcasts |
+| Redis stream | `user:<userID>:stream` | Offline fallback when no active user subscriber exists |
+
+**Control frame examples:**
+
+```json
+{ "type": "ws.topic.subscribe", "data": { "topic": "trip:trip_123" } }
+{ "type": "ws.topic.unsubscribe", "data": { "topic": "trip:trip_123:chat" } }
+{ "type": "ws.room.join", "data": { "roomID": "trip:trip_123:chat" } }
+```
+
+**Chat receive frame example (room broadcast):**
+
+```json
+{
+  "type": "chat.message.received",
+  "roomID": "trip:trip_123:chat",
+  "data": {
+    "tripID": "trip_123",
+    "roomID": "trip:trip_123:chat",
+    "senderID": "user_456",
+    "text": "I am 2 minutes away",
+    "sentAt": 1717580400,
+    "messageID": "a3b1-..."
+  }
+}
+```
+
+### Auto-Join/Leave Behavior (Current Implementation)
+
+- Rider joins trip + chat scopes when receiving:
+  - `trip.event.created`
+  - `trip.event.driver_assigned`
+  - `payment.event.session_created`
+- Driver joins chat room server-side immediately on `driver.cmd.trip_accept`.
+- On `trip.event.cancelled`, both sides unsubscribe trip + chat scopes on frontend, and gateway also performs server-side room cleanup on cancellation teardown.
 
 ### Client → Server message types
 
@@ -606,7 +685,8 @@ Frontend (Rider)
                                                 data: {
                                                   tripID,
                                                   riderID,
-                                                  driverID   (empty string if no driver was assigned)
+                                                  driverID,          (empty string if no driver was assigned)
+                                                  driverAccepted     (true when cancelled after assignment)
                                                 }
                                         │
                                notify_trip_cancelled
@@ -614,13 +694,18 @@ Frontend (Rider)
                                         │
                                         ▼
                                cancelConsumer:
-                               1. ClearTripChatPair(tripID)
+                               1. Resolve effective teardown condition:
+                                    shouldTearDown = driverAccepted || driverID != "" || GetActiveDriver(riderID) != ""
+                               2. If shouldTearDown: ClearTripChatPair(tripID)
                                     │ deletes trip:<tripID>:chat:rider
                                     │ deletes trip:<tripID>:chat:driver
                                     │ deletes rider:<riderID>:active_driver
                                     │ deletes driver:<driverID>:active_rider
-                               2. SendMessage(riderID, wsMsg)
-                               3. if driverID != "": SendMessage(driverID, wsMsg)
+                               3. Force room leave for rider + driver on:
+                                    trip:<tripID>
+                                    trip:<tripID>:chat
+                               4. SendMessage(riderID, wsMsg)
+                               5. if driverID != "": SendMessage(driverID, wsMsg)
                                         │
                                WS frame to rider + driver:
                                { type: "trip.event.cancelled",
@@ -637,7 +722,7 @@ Frontend (Rider)
            - dispatch(setTripStatus(Cancelled))        - dispatch(setTripStatus(Cancelled))
 ```
 
-**Idempotency:** If the trip is already in `cancelled` state when `CancelTrip` is called, the gRPC handler returns a `codes.NotFound` error; the HTTP handler maps this to `404`. The frontend `handleCancelTrip` still calls `dispatch(resetTrip())` in the `catch` block so the UI always resets.
+**Idempotency:** If the trip is already `cancelled`, trip-service returns the existing trip and cancellation remains a no-op on persistence.
 
 **Driver location relay:** Once `driver:<driverID>:active_rider` is deleted by `ClearTripChatPair`, the driver-service `locationConsumer` finds no active rider and stops forwarding location updates — the relay self-terminates on the next GPS frame.
 
@@ -1217,7 +1302,7 @@ For room broadcasts (chat), the same pattern applies but the channel is `room:<r
 
 ### 9. WebSocket Connection Drops / Rider Reconnects
 
-1. TCP connection closes → `conn.ReadMessage()` returns an error in the ws-gateway read loop.
+1. TCP connection closes or browser refresh occurs (`1000`/`1001`) → read loop exits.
 2. The deferred `connManager.Remove(socketID)` fires:
    - Leaves all rooms the socket was in.
    - If it was the user's last socket on this pod, closes and deletes the `user:<userID>:events` Redis subscription.
@@ -1227,7 +1312,25 @@ For room broadcasts (chat), the same pattern applies but the channel is `room:<r
      - Expired → `dispatch(logout())`.
      - Not expired → `dispatch(addError({ message: "Lost connection to the server" }))`.
    - Other codes → `dispatch(addError({ message: e.reason || "Connection closed unexpectedly (code X)" }))`.
-4. Rider must reconnect and re-send `ws.topic.subscribe` for any active trip (topic registry is in-memory, not persisted).
+4. On reconnect, gateway `Add(userID, socketID, conn)`:
+   - re-subscribes to `user:<userID>:events` if needed,
+   - replays `user:<userID>:stream` backlog when present.
+5. Frontend auto-rejoins trip scopes when trip lifecycle events arrive (`created`, `driver_assigned`, `payment_session_created`).
+
+**Data-path example when user is offline during event:**
+
+```text
+QueueConsumer -> connMgr.SendMessage(userID,msg)
+  -> Publish user:<userID>:events
+  -> receivedBy = 0
+  -> XADD user:<userID>:stream payload=msg
+
+Next connect:
+  Add(userID,socketID)
+  -> replayUserStream(userID)
+  -> Send replayed messages to local sockets
+  -> XDEL acknowledged entries
+```
 
 ---
 

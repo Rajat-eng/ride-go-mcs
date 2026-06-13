@@ -1,0 +1,24 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: dlq-worker
+spec:
+  schedule: "*/1 * * * *"
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 3
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: dlq-worker
+              image: IMAGE_PLACEHOLDER/dlq-worker
+              imagePullPolicy: IfNotPresent
+              env:
+                - name: RABBITMQ_URI
+                  valueFrom:
+                    secretKeyRef:
+                      name: rabbitmq-credentials
+                      key: uri

@@ -3,6 +3,7 @@ import { Driver, Trip } from '../../types';
 import { ChatMessageData, TripEvents } from '../../contracts';
 
 interface DriverState {
+  ownerUserID: string | null;
   driver: Driver | null;
   requestedTrip: Trip | null;
   tripStatus: TripEvents | null;
@@ -11,6 +12,7 @@ interface DriverState {
 }
 
 const initialState: DriverState = {
+  ownerUserID: null,
   driver: null,
   requestedTrip: null,
   tripStatus: null,
@@ -22,6 +24,9 @@ const driverSlice = createSlice({
   name: 'driver',
   initialState,
   reducers: {
+    setOwnerUserID(state, action: PayloadAction<string | null>) {
+      state.ownerUserID = action.payload;
+    },
     setDriver(state, action: PayloadAction<Driver | null>) {
       state.driver = action.payload;
     },
@@ -42,16 +47,21 @@ const driverSlice = createSlice({
       state.requestedTrip = null;
       state.chatMessages = [];
     },
+    clearState() {
+      return initialState;
+    },
   },
 });
 
 export const {
+  setOwnerUserID,
   setDriver,
   setRequestedTrip,
   setTripStatus,
   addChatMessage,
   setError,
   resetTrip,
+  clearState,
 } = driverSlice.actions;
 
 export default driverSlice.reducer;

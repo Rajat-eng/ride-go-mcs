@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ws-gateway
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ws-gateway
+  template:
+    metadata:
+      labels:
+        app: ws-gateway
+    spec:
+      containers:
+        - name: ws-gateway
+          image: IMAGE_PLACEHOLDER/ws-gateway
+          ports:
+            - containerPort: 8082
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "125m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          env:
+            - name: HTTP_ADDR
+              value: ":8082"
+            - name: RABBITMQ_URI
+              valueFrom:
+                secretKeyRef:
+                  name: rabbitmq-credentials
+                  key: uri
+            - name: REDIS_URI
+              valueFrom:
+                configMapKeyRef:
+                  key: REDIS_URI
+                  name: app-config
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secrets
+                  key: secret
+            - name: DRIVER_SERVICE_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: DRIVER_SERVICE_URL
+                  name: app-config
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef:
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
+                  name: app-config
+            - name: ALLOWED_ORIGINS
+              valueFrom:
+                configMapKeyRef:
+                  key: ALLOWED_ORIGINS
+                  name: app-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ws-gateway
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8082
+      targetPort: 8082
+  selector:
+    app: ws-gateway

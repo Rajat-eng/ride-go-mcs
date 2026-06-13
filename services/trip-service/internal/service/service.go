@@ -167,9 +167,20 @@ func (s *TripService) CancelTrip(ctx context.Context, tripID, requesterUserID st
 	if err != nil {
 		return nil, fmt.Errorf("trip not found: %w", err)
 	}
-	if trip.UserID != requesterUserID {
-		return nil, fmt.Errorf("only the rider who created the trip can cancel it")
+
+	isRider := trip.UserID == requesterUserID
+	isAccepted := trip.Status == "accepted"
+	driverID := ""
+	if trip.Driver != nil {
+		driverID = trip.Driver.Id
 	}
+	isAcceptedDriver := isAccepted && driverID != ""
+	isAssignedDriver := isAcceptedDriver && driverID == requesterUserID
+
+	if !isRider && !isAssignedDriver {
+		return nil, fmt.Errorf("only the rider can cancel before acceptance; after acceptance rider or assigned driver can cancel")
+	}
+
 	if trip.Status == "cancelled" {
 		return trip, nil // idempotent
 	}

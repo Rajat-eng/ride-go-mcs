@@ -79,9 +79,10 @@ type DriverLocationEventData struct {
 // It carries both riderID and driverID so the ws-gateway cancel consumer can
 // fan-out to both parties and clean up Redis state in one shot.
 type TripCancelledData struct {
-	TripID   string `json:"tripID"`
-	RiderID  string `json:"riderID"`
-	DriverID string `json:"driverID"`
+	TripID         string `json:"tripID"`
+	RiderID        string `json:"riderID"`
+	DriverID       string `json:"driverID"`
+	DriverAccepted bool   `json:"driverAccepted"`
 }
 
 // ChatMessageData is the payload published to ChatCmdSendQueue by ws-gateway

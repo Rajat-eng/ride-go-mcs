@@ -92,7 +92,7 @@ func (qc *QueueConsumer) Start() error {
 			return err
 		}
 
-		log.Printf("Delivered message of type '%s' to user %s", clientMsg.Type, userID)
+		log.Printf("Processed message of type '%s' for user %s", clientMsg.Type, userID)
 		return nil
 	})
 }

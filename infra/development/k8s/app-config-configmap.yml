@@ -6,7 +6,7 @@ data:
   ENVIRONMENT: "development"
   GATEWAY_HTTP_ADDR: ":8081"
   WEB_URL: "http://localhost:3000"
-  JAEGER_ENDPOINT: "http://otel-collector:14268/api/traces"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"
   STRIPE_SUCCESS_URL: "http://localhost:3000?payment=success"
   STRIPE_CANCEL_URL: "http://localhost:3000?payment=cancel"
   REDIS_URI: "redis:6379"

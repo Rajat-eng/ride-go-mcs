@@ -21,15 +21,15 @@ spec:
           args:
             - --config=/etc/otelcol/collector-gateway.yaml
           ports:
-            - name: metrics
+            - name: metrics # its own metrics endpoint that Prometheus scrapes at otel-collector:9464, and also used for self-monitoring of the gateway itself.
               containerPort: 9464
-            - name: health
+            - name: health # Exposes the health endpoint for readiness and liveness probes for both Kubernetes and Prometheus blackbox exporter.
               containerPort: 13133
-            - name: otlp-grpc
+            - name: otlp-grpc # Exposes the OTLP gRPC endpoint for trace and metric ingestion from instrumented apps and node agent.
               containerPort: 4317
-            - name: otlp-http
+            - name: otlp-http # Exposes the OTLP HTTP endpoint for trace and metric ingestion from instrumented apps and node agent.
               containerPort: 4318
-            - name: jaeger-http
+            - name: jaeger-http # Exposes the Jaeger HTTP endpoint for trace ingestion from Jaeger clients.
               containerPort: 14268
           resources:
             requests:
@@ -41,6 +41,13 @@ spec:
           volumeMounts:
             - name: otel-collector-gateway-config
               mountPath: /etc/otelcol
+          startupProbe:
+            httpGet:
+              path: /
+              port: 13133
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 12
           readinessProbe:
             httpGet:
               path: /
@@ -66,7 +73,7 @@ spec:
   selector:
     app: "otel-collector-gateway"
   ports:
-    - name: metrics # Exposes the aggregated metrics from the gateway for scraping by Prometheus.
+    - name: metrics # otel collector scrapes its own metrics on this port, and Prometheus scrapes this port as well at otel-collector:9464.
       port: 9464
       targetPort: 9464
     - name: health # Exposes the health endpoint for readiness and liveness probes.

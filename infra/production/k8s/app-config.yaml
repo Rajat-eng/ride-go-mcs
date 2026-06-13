@@ -5,3 +5,10 @@ metadata:
 data:
   ENVIRONMENT: "production"
   GATEWAY_HTTP_ADDR: ":8081"
+  WEB_URL: "https://example.com"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "otel-collector:4317"
+  STRIPE_SUCCESS_URL: "https://example.com?payment=success"
+  STRIPE_CANCEL_URL: "https://example.com?payment=cancel"
+  REDIS_URI: "redis:6379"
+  DRIVER_SERVICE_URL: "driver-service:9092"
+  ALLOWED_ORIGINS: "https://example.com"

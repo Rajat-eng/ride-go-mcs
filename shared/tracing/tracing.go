@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/jaeger"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -21,8 +21,12 @@ type Config struct {
 }
 
 func InitTracer(cfg Config) (func(context.Context) error, error) {
+	if cfg.OTLPEndpoint == "" {
+		return nil, fmt.Errorf("otlp endpoint is required for tracing initialization")
+	}
+
 	// Exporter
-	traceExporter, err := NewExporter(cfg.JaegerEndpoint)
+	traceExporter, err := NewExporter(cfg.OTLPEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +51,15 @@ func GetTracer(name string) trace.Tracer {
 }
 
 func NewExporter(endpoint string) (sdktrace.SpanExporter, error) {
-	return jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(endpoint)))
+	ctx := context.Background()
+	normalizedEndpoint, insecure := normalizeOTLPEndpoint(endpoint)
+
+	options := []otlptracegrpc.Option{otlptracegrpc.WithEndpoint(normalizedEndpoint)}
+	if insecure {
+		options = append(options, otlptracegrpc.WithInsecure())
+	}
+
+	return otlptracegrpc.New(ctx, options...)
 }
 
 func newPropagator() propagation.TextMapPropagator {
@@ -67,6 +79,7 @@ func newTraceProvider(cfg Config, exporter sdktrace.SpanExporter) (*sdktrace.Tra
 	// get trace provder with resource and exporter
 	traceProvider := sdktrace.NewTracerProvider(
 		sdktrace.WithBatcher(exporter), // send batch every 5sec (default)
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
 		sdktrace.WithResource(res),
 	)
 

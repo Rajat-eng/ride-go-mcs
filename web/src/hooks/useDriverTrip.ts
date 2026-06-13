@@ -29,6 +29,11 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
     packageSlug,
   });
 
+  const getTripIdentifiers = useCallback(() => ({
+    tripID: requestedTrip?.id ?? '',
+    riderID: requestedTrip?.userID ?? '',
+  }), [requestedTrip]);
+
   // Switch to watchPosition so location updates continuously.
   // Each new position: update the UI marker AND push to the backend over WS.
   useEffect(() => {
@@ -76,74 +81,90 @@ export function useDriverTrip(packageSlug: CarPackageSlug) {
   }, [locationReady, driverLocation, sendMessage]);
 
   const handleAcceptTrip = useCallback(() => {
-    if (!requestedTrip || !requestedTrip.id) {
+    const { tripID, riderID } = getTripIdentifiers();
+    if (!tripID || !riderID) {
       alert("No trip ID found");
       return;
     }
 
-    sendMessage({
+    const wasSent = sendMessage({
       type: TripEvents.DriverTripAccept,
       data: {
-        tripID: requestedTrip.id,
-        riderID: requestedTrip.userID,
+        tripID,
+        riderID,
       },
     });
 
+    if (!wasSent) {
+      dispatch(addError({ message: 'Connection is not ready. Please wait and try again.', timestamp: Date.now() }));
+      return;
+    }
+
     dispatch(setTripStatus(TripEvents.DriverTripAccept));
-  }, [requestedTrip, sendMessage, dispatch]);
+  }, [dispatch, getTripIdentifiers, sendMessage]);
 
   const handleDeclineTrip = useCallback(() => {
-    if (!requestedTrip || !requestedTrip.id) {
+    const { tripID, riderID } = getTripIdentifiers();
+    if (!tripID || !riderID) {
       alert("No trip ID found");
       return;
     }
 
-    sendMessage({
+    const declineSent = sendMessage({
       type: TripEvents.DriverTripDecline,
       data: {
-        tripID: requestedTrip.id,
-        riderID: requestedTrip.userID,
+        tripID,
+        riderID,
       },
     });
+    if (!declineSent) {
+      dispatch(addError({ message: 'Connection is not ready. Please wait and try again.', timestamp: Date.now() }));
+      return;
+    }
 
     sendMessage({
       type: TripEvents.WsTopicUnsubscribe,
-      data: { topic: `trip:${requestedTrip.id}` },
+      data: { topic: `trip:${tripID}` },
     });
     sendMessage({
       type: TripEvents.WsTopicUnsubscribe,
-      data: { topic: `trip:${requestedTrip.id}:chat` },
+      data: { topic: `trip:${tripID}:chat` },
     });
 
     dispatch(setTripStatus(TripEvents.DriverTripDecline));
     dispatch(resetTrip());
-  }, [requestedTrip, sendMessage, dispatch]);
+  }, [dispatch, getTripIdentifiers, sendMessage]);
 
   const handleCancelTrip = useCallback(() => {
-    if (!requestedTrip || !requestedTrip.id) {
+    const { tripID, riderID } = getTripIdentifiers();
+    if (!tripID || !riderID) {
       return;
     }
 
     // Reuse the decline command as driver-side cancellation for the current trip context.
-    sendMessage({
+    const cancelSent = sendMessage({
       type: TripEvents.DriverTripDecline,
       data: {
-        tripID: requestedTrip.id,
-        riderID: requestedTrip.userID,
+        tripID,
+        riderID,
       },
     });
+    if (!cancelSent) {
+      dispatch(addError({ message: 'Connection is not ready. Please wait and try again.', timestamp: Date.now() }));
+      return;
+    }
 
     sendMessage({
       type: TripEvents.WsTopicUnsubscribe,
-      data: { topic: `trip:${requestedTrip.id}` },
+      data: { topic: `trip:${tripID}` },
     });
     sendMessage({
       type: TripEvents.WsTopicUnsubscribe,
-      data: { topic: `trip:${requestedTrip.id}:chat` },
+      data: { topic: `trip:${tripID}:chat` },
     });
 
     dispatch(resetTrip());
-  }, [requestedTrip, sendMessage, dispatch]);
+  }, [dispatch, getTripIdentifiers, sendMessage]);
 
   const driverGeohash = useMemo(
     () => Geohash.encode(driverLocation.latitude, driverLocation.longitude, 7),

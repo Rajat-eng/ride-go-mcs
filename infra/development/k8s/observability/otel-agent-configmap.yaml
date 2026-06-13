@@ -11,6 +11,9 @@ data:
       filelog:
         include:
           - /var/log/pods/*/*/*.log
+        exclude:
+          - /var/log/pods/*/otel-collector-agent/*.log
+          - /var/log/pods/*/otel-collector/*.log
         start_at: end
         include_file_path: true
 
@@ -29,7 +32,12 @@ data:
         tls:
           insecure: true
 
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
     service:
+      extensions: [health_check]
       pipelines:
         logs:
           receivers: [filelog]

@@ -12,9 +12,12 @@ import (
 	pb "ride-sharing/shared/proto/driver"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/websocket"
 )
 
 const wsPongWait = 45 * time.Second
+const wsPingPeriod = 20 * time.Second
+const driverReconnectGracePeriod = 2 * time.Second
 
 func startWsGateHeartbeat(userID string, rl *RateLimiter) func() {
 	done := make(chan struct{})
@@ -25,6 +28,27 @@ func startWsGateHeartbeat(userID string, rl *RateLimiter) func() {
 			select {
 			case <-ticker.C:
 				rl.RefreshWsConnectionGate(context.Background(), userID)
+			case <-done:
+				return
+			}
+		}
+	}()
+	return func() { close(done) }
+}
+
+func startWsPingLoop(conn *websocket.Conn) func() {
+	done := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(wsPingPeriod)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				deadline := time.Now().Add(10 * time.Second)
+				//
+				if err := conn.WriteControl(websocket.PingMessage, nil, deadline); err != nil {
+					return
+				}
 			case <-done:
 				return
 			}
@@ -56,9 +80,14 @@ func handleRidersWebSocket(
 		log.Printf("WS connection rejected for rider %s: too many connections", userID)
 		return
 	}
-	defer release()
+	defer release() // Start heartbeat to keep connection gate slot alive while WS is active.
+	// This ensures that if the connection is alive, it won't be rejected by subsequent connections hitting the gate limit.
+	//  The heartbeat will stop when the WS connection is closed and the deferred release is called.
 	stopHeartbeat := startWsGateHeartbeat(userID, rl)
 	defer stopHeartbeat()
+	stopPing := startWsPingLoop(conn) // Start ping loop to keep connection alive and detect dead connections.
+	// Dead connections will be cleaned up when ping fails and WS connection is closed, triggering the deferred release and heartbeat stop.
+	defer stopPing()
 
 	connManager.Add(userID, socketID, conn)
 	defer connManager.Remove(socketID)
@@ -163,6 +192,8 @@ func handleDriversWebSocket(
 	defer release()
 	stopHeartbeat := startWsGateHeartbeat(userID, rl)
 	defer stopHeartbeat()
+	stopPing := startWsPingLoop(conn)
+	defer stopPing()
 
 	ctx := r.Context()
 
@@ -175,6 +206,19 @@ func handleDriversWebSocket(
 
 	defer func() {
 		connManager.Remove(socketID)
+		if connManager.HasLocalUser(userID) {
+			log.Printf("Skipping driver unregister for %s: another socket is already active", userID)
+			return
+		}
+
+		// Give refresh/reconnect a short grace window so we don't unregister
+		// drivers that immediately reconnect with a new socket.
+		time.Sleep(driverReconnectGracePeriod)
+		if connManager.HasLocalUser(userID) {
+			log.Printf("Skipping driver unregister for %s: reconnected within grace period", userID)
+			return
+		}
+
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		// on disconnect, attempt to unregister driver to clean up geo state.
 		// timeout will trigger cleanup on the driver service side even if this call fails, so we won't leak drivers indefinitely.

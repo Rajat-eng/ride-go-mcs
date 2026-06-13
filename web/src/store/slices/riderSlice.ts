@@ -5,6 +5,7 @@ import { ChatMessageData, PaymentEventSessionCreatedData, TripEvents } from '../
 import { Coordinate } from '../../types';
 
 interface RiderState {
+  ownerUserID: string | null;
   drivers: Driver[];
   tripStatus: TripEvents | null;
   paymentSession: PaymentEventSessionCreatedData | null;
@@ -17,6 +18,7 @@ interface RiderState {
 }
 
 const initialState: RiderState = {
+  ownerUserID: null,
   drivers: [],
   tripStatus: null,
   paymentSession: null,
@@ -32,6 +34,9 @@ const riderSlice = createSlice({
   name: 'rider',
   initialState,
   reducers: {
+    setOwnerUserID(state, action: PayloadAction<string | null>) {
+      state.ownerUserID = action.payload;
+    },
     setDrivers(state, action: PayloadAction<Driver[]>) {
       state.drivers = action.payload;
     },
@@ -68,10 +73,14 @@ const riderSlice = createSlice({
       state.assignedDriverLocation = null;
       state.chatMessages = [];
     },
+    clearState() {
+      return initialState;
+    },
   },
 });
 
 export const {
+  setOwnerUserID,
   setDrivers,
   setTripStatus,
   setPaymentSession,
@@ -82,6 +91,7 @@ export const {
   setDestination,
   setError,
   resetTrip,
+  clearState,
 } = riderSlice.actions;
 
 export default riderSlice.reducer;

@@ -92,7 +92,7 @@ func (rcm *RedisConnectionManager) Add(userID, socketID string, conn *websocket.
 		go rcm.replayUserStream(userID)
 	}
 
-	log.Printf("Added socket %s for user %s", socketID, userID)
+	log.Printf("RedisConnectionManager: added socket %s for user %s", socketID, userID)
 }
 
 func userEventStreamKey(userID string) string {
@@ -499,4 +499,13 @@ func (rcm *RedisConnectionManager) LeaveUserFromRoom(userID, roomID string) {
 	for _, socketID := range socketIDs {
 		rcm.LeaveRoom(socketID, roomID)
 	}
+}
+
+// HasLocalUser reports whether this gateway node currently has at least one
+// active socket for the given user.
+func (rcm *RedisConnectionManager) HasLocalUser(userID string) bool {
+	if userID == "" {
+		return false
+	}
+	return rcm.localCM.HasUser(userID)
 }

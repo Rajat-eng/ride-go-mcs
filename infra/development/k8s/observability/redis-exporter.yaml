@@ -23,6 +23,26 @@ spec:
               value: redis://redis:6379
           ports:
             - containerPort: 9121
+          startupProbe:
+            tcpSocket:
+              port: 9121
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 12
+          readinessProbe:
+            tcpSocket:
+              port: 9121
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 9121
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 3
           resources:
             requests:
               cpu: "50m"

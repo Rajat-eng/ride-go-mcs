@@ -19,6 +19,29 @@ spec:
           image: otel/opentelemetry-collector-contrib:0.102.1
           args:
             - --config=/etc/otelcol/collector-agent.yaml
+          startupProbe:
+            httpGet:
+              path: /
+              port: 13133
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 12
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 13133
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 3
           resources:
             requests:
               cpu: "100m"

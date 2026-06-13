@@ -40,6 +40,11 @@ spec:
             secretKeyRef:
               name: stripe-secrets
               key: stripe-publishable-key
+        - name: STRIPE_PUBLISHABLE_KEY
+          valueFrom:
+            secretKeyRef:
+              name: stripe-secrets
+              key: stripe-publishable-key
         - name: NEXTAUTH_URL
           valueFrom:
             configMapKeyRef:

@@ -22,6 +22,26 @@ spec:
             - --config.file=/etc/blackbox/blackbox.yml
           ports:
             - containerPort: 9115
+          startupProbe:
+            tcpSocket:
+              port: 9115
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 12
+          readinessProbe:
+            tcpSocket:
+              port: 9115
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 9115
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 3
           resources:
             requests:
               cpu: "50m"

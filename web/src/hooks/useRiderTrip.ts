@@ -4,6 +4,7 @@ import { setTrip, setDestination, resetTrip, setTripStatus } from '../store/slic
 import { RouteFare } from '../types';
 import { HTTPTripPreviewRequestPayload, TripEvents } from '../contracts';
 import { usePreviewTripMutation, useStartTripMutation, useCancelTripMutation } from '../store/api/tripApi';
+import { TripPreviewApiResponseSchema, StartTripResponseSchema } from '../lib/schemas';
 
 export function useRiderTrip(userID: string) {
   const dispatch = useAppDispatch();
@@ -34,21 +35,26 @@ export function useRiderTrip(userID: string) {
         destination: { latitude: latlng.lat, longitude: latlng.lng },
       };
 
-      const result = await previewTrip(payload).unwrap();
-      const data = result.data;
+      const raw = await previewTrip(payload).unwrap();
+      // Prefer validated shape; fall back to raw cast so a schema mismatch
+      // never silently erases the destination pin the user just placed.
+      const parsed = TripPreviewApiResponseSchema.safeParse(raw);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = parsed.success ? parsed.data.data : (raw as any)?.data ?? raw;
 
-      if (data.route == null) {
+      if (!data?.route) {
         dispatch(setDestination(null));
         return;
       }
 
       const parsedRoute = data.route.geometry[0].coordinates
-        .map((coord) => [coord.longitude, coord.latitude] as [number, number]);
+        .map((coord: { longitude: number; latitude: number }) => [coord.longitude, coord.latitude] as [number, number]);
 
       dispatch(setTrip({
         tripID: "",
         route: parsedRoute,
-        rideFares: data.rideFares,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        rideFares: data.rideFares as any,
         distance: data.route.distance,
         duration: data.route.duration,
       }));
@@ -63,7 +69,9 @@ export function useRiderTrip(userID: string) {
       return;
     }
 
-    const data = await startTrip({ rideFareID: fare.id, userID }).unwrap();
+    const raw = await startTrip({ rideFareID: fare.id, userID }).unwrap();
+    const parsed = StartTripResponseSchema.safeParse(raw);
+    const data = parsed.success ? parsed.data : raw as { tripID: string };
 
     if (trip) {
       dispatch(setTrip({ ...trip, tripID: data.tripID, selectedFare: fare }));

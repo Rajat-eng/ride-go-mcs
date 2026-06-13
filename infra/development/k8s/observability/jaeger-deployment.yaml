@@ -24,6 +24,29 @@ spec:
             - containerPort: 14268 # Collector HTTP
             - containerPort: 4317  # OTLP gRPC
             - containerPort: 4318  # OTLP HTTP
+          startupProbe:
+            httpGet:
+              path: /
+              port: 16686
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 12
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 16686
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 16686
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 3
           env:
             - name: COLLECTOR_OTLP_ENABLED
               value: "true"

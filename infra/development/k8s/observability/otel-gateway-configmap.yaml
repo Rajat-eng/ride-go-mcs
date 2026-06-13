@@ -1,6 +1,6 @@
 # Purpose: Defines the central collector gateway receivers, processors, exporters, and scrape jobs.
 # Gateway flow: This is the core routing config. It receives OTLP and Jaeger data, scrapes RabbitMQ,
-# Redis exporter, and blackbox targets, then sends traces to Jaeger, logs to Loki, and exposes metrics for Prometheus.
+# Redis exporter, blackbox is scraped by prometheus, and then routes metrics to Prometheus, traces to Jaeger, and logs to Loki
 apiVersion: v1
 kind: ConfigMap
 metadata:

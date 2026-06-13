@@ -84,6 +84,30 @@ go version
 tilt up
 ```
 
+## GitHub Actions CI/CD
+
+This repository now includes two workflows:
+
+- `.github/workflows/ci.yml`: Runs on every push and pull request. It checks Go formatting, runs `go vet`, runs Go tests, and runs web lint/build for the Next.js app.
+- `.github/workflows/cd.yml`: Runs on pushes to `main` (and manual trigger). It builds and pushes production images for all services (`api-gateway`, `chat-service`, `dlq-worker`, `driver-service`, `login-service`, `payment-service`, `trip-service`, `web`, `ws-gateway`) to Amazon ECR, then optionally deploys production Kubernetes manifests to EKS.
+
+### Required GitHub configuration
+
+Repository **Variables**:
+
+- `AWS_REGION` (example: `ap-south-1`)
+- `ECR_REPOSITORY_PREFIX` (optional, example: `ride-sharing`)
+
+Repository **Secrets**:
+
+- `AWS_ROLE_TO_ASSUME` (IAM role ARN used by GitHub OIDC)
+
+Optional secret for automatic deploy step:
+
+- `EKS_CLUSTER_NAME`
+
+If `EKS_CLUSTER_NAME` is not set, image publishing still runs and the deploy step is skipped.
+
 ## Monitor
 
 ```bash

@@ -12,6 +12,27 @@ spec:
       labels:
         app: login-service
     spec:
+      initContainers:
+        - name: wait-for-dependencies
+          image: busybox:1.36
+          env:
+            - name: POSTGRES_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: host
+            - name: POSTGRES_PORT
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: port
+          command:
+            - sh
+            - -c
+            - |
+              until nc -z "$POSTGRES_HOST" "$POSTGRES_PORT"; do echo "waiting for postgres"; sleep 2; done
+              until nc -z rabbitmq 5672; do echo "waiting for rabbitmq:5672"; sleep 2; done
+              until nc -z otel-collector 4317; do echo "waiting for otel-collector:4317"; sleep 2; done
       containers:
         - name: login-service
           image: ride-sharing/login-service
@@ -20,6 +41,27 @@ spec:
               containerPort: 8085
             - name: grpc
               containerPort: 9095
+          startupProbe:
+            tcpSocket:
+              port: 9095
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 12
+          readinessProbe:
+            tcpSocket:
+              port: 9095
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8085
+            initialDelaySeconds: 15
+            periodSeconds: 15
+            timeoutSeconds: 2
+            failureThreshold: 3
           resources:
             requests:
               memory: "64Mi"
@@ -63,10 +105,10 @@ spec:
                 secretKeyRef:
                   name: google-auth-secrets
                   key: client-id
-            - name: JAEGER_ENDPOINT
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
               valueFrom:
                 configMapKeyRef:
-                  key: JAEGER_ENDPOINT
+                  key: OTEL_EXPORTER_OTLP_ENDPOINT
                   name: app-config
             - name: MIGRATIONS_DIR
               value: "/app/migrations"

@@ -176,10 +176,4 @@ export interface HTTPTripPreviewRequestPayload {
   destination: Coordinate;
 }
 
-export function isValidTripEvent(event: string): event is TripEvents {
-  return Object.values(TripEvents).includes(event as TripEvents);
-}
 
-export function isValidWsMessage(message: ServerWsMessage): message is ServerWsMessage {
-  return isValidTripEvent(message.type);
-}

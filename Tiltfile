@@ -38,6 +38,7 @@ k8s_yaml('./infra/development/k8s/observability/collector-agent-daemonset.yaml')
 k8s_yaml('./infra/development/k8s/observability/prometheus-config.yaml')
 k8s_yaml('./infra/development/k8s/observability/prometheus-deployment.yaml')
 k8s_yaml('./infra/development/k8s/observability/grafana-datasources.yaml')
+k8s_yaml('./infra/development/k8s/observability/grafana-dashboards.yaml')
 k8s_yaml('./infra/development/k8s/observability/grafana.yaml')
 
 k8s_resource(
@@ -254,12 +255,21 @@ k8s_resource(
 
 ### Web Frontend ###
 
+stripe_publishable_key = os.getenv('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', '')
+if stripe_publishable_key == '':
+  # NEXT_PUBLIC_* vars are compiled into the Next.js client bundle at build time.
+  # Fallback to the cluster secret so local shell env is not mandatory.
+  stripe_publishable_key = str(local(
+    "kubectl get secret stripe-secrets -o jsonpath='{.data.stripe-publishable-key}' 2>/dev/null | openssl base64 -d -A",
+    quiet=True,
+  )).strip()
+
 docker_build(
   'ride-sharing/web',
   '.',
   dockerfile='./infra/development/docker/web.Dockerfile',
   build_args={
-    'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY': os.getenv('NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', ''),
+    'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY': stripe_publishable_key,
   },
 )
 

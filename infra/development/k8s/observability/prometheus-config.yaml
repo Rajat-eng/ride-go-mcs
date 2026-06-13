@@ -1,6 +1,9 @@
 # Purpose: Defines Prometheus scrape targets and alert rules for the observability stack.
 # Gateway flow: Prometheus does not send data to the gateway. It scrapes the gateway's metrics endpoint
 # at otel-collector:9464, so this file describes how Prometheus reads metrics emitted by the gateway.
+# at the same time, the gateway is configured to scrape the RabbitMQ exporter, Redis exporter, and blackbox exporter itself, so this file also defines those scrape targets and alerting rules based on those targets.
+# on 9090 Prometheus also scrapes its own internal metrics for self-monitoring, and those are defined here as well such as rabbitmq_queue_messages_ready, redis_up, and probe_success which are used in the alerting rules.
+# 9090 and 9094 ae separate ports is a common pattern to avoid having Prometheus scrape a large number of targets directly and instead have a central collector that aggregates metrics and exposes them for Prometheus to scrape.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -19,7 +22,7 @@ data:
         static_configs:
           - targets: ["localhost:9090"]
 
-      - job_name: otel-collector
+      - job_name: otel-collector 
         static_configs:
           - targets: ["otel-collector:9464"]
 

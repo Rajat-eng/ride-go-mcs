@@ -57,22 +57,27 @@ func (c *cancelConsumer) Start() error {
 			},
 		}
 
-		// Clear Redis chat pair — this also removes active_rider and active_driver keys
-		// so the driver becomes available for new trips immediately.
-		if err := c.connManager.ClearTripChatPair(payload.TripID); err != nil {
-			log.Printf("cancelConsumer: failed to clear trip chat pair for trip %s: %v", payload.TripID, err)
-			// non-fatal — continue to notify sockets
-		}
+		shouldTearDownTripStreams := payload.DriverAccepted || driverID != ""
+		if shouldTearDownTripStreams {
+			log.Printf("cancelConsumer: closing chat/location streams for trip %s (driverAccepted=%t driverID=%s)", payload.TripID, payload.DriverAccepted, driverID)
+			// After acceptance, cancellation must fully terminate trip chat + location relay.
+			if err := c.connManager.ClearTripChatPair(payload.TripID); err != nil {
+				log.Printf("cancelConsumer: failed to clear trip chat pair for trip %s: %v", payload.TripID, err)
+				// non-fatal — continue to notify sockets
+			}
 
-		// Force local room cleanup for both participants so stale channels are closed
-		// even when clients don't send explicit unsubscribe messages.
-		tripRoomID := "trip:" + payload.TripID
-		chatRoomID := tripRoomID + ":chat"
-		c.connManager.LeaveUserFromRoom(payload.RiderID, tripRoomID)
-		c.connManager.LeaveUserFromRoom(payload.RiderID, chatRoomID)
-		if driverID != "" {
-			c.connManager.LeaveUserFromRoom(driverID, tripRoomID)
-			c.connManager.LeaveUserFromRoom(driverID, chatRoomID)
+			// Force local room cleanup for both participants so stale channels are closed
+			// even when clients don't send explicit unsubscribe messages.
+			tripRoomID := "trip:" + payload.TripID
+			chatRoomID := tripRoomID + ":chat"
+			c.connManager.LeaveUserFromRoom(payload.RiderID, tripRoomID)
+			c.connManager.LeaveUserFromRoom(payload.RiderID, chatRoomID)
+			if driverID != "" {
+				c.connManager.LeaveUserFromRoom(driverID, tripRoomID)
+				c.connManager.LeaveUserFromRoom(driverID, chatRoomID)
+			}
+		} else {
+			log.Printf("cancelConsumer: trip %s cancelled before driver acceptance; preserving socket room state", payload.TripID)
 		}
 
 		// Notify rider

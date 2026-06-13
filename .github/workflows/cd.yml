@@ -1,0 +1,215 @@
+name: CD
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  ECR_REPOSITORY_PREFIX: ${{ vars.ECR_REPOSITORY_PREFIX }}
+
+jobs:
+  preflight:
+    name: Validate CD Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      can_deploy: ${{ steps.validate.outputs.can_deploy }} # ouptut whether we can deploy at all. this is used to decide whether to run the rest of the workflow or not
+      can_k8s_deploy: ${{ steps.validate.outputs.can_k8s_deploy }} # output whether we can deploy to k8s. if not, we might still be able to push images, so this is used to decide whether to run the deploy-to-eks job or not
+      missing: ${{ steps.validate.outputs.missing }} # output which required variables/secrets are missing, used for debugging when the workflow is skipped
+
+    steps:
+      - name: Check required variables and secrets
+        id: validate
+        env:
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
+        run: |
+          missing=()
+
+          if [ -z "$AWS_REGION" ]; then missing+=("vars.AWS_REGION"); fi
+          if [ -z "$AWS_ROLE_TO_ASSUME" ]; then missing+=("secrets.AWS_ROLE_TO_ASSUME"); fi
+
+          if [ ${#missing[@]} -eq 0 ]; then
+            echo "can_deploy=true" >> "$GITHUB_OUTPUT"
+            if [ -n "$EKS_CLUSTER_NAME" ]; then
+              echo "can_k8s_deploy=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "can_k8s_deploy=false" >> "$GITHUB_OUTPUT"
+            fi
+            echo "missing=none" >> "$GITHUB_OUTPUT"
+          else
+            echo "can_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "can_k8s_deploy=false" >> "$GITHUB_OUTPUT"
+            echo "missing=${missing[*]}" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-and-push-images:
+    name: Build and Push Images
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: ${{ needs.preflight.outputs.can_deploy == 'true' }}
+
+    strategy: # strategy allows us to define a matrix of different configurations to run the same steps with. here we use it to build and push all our images with the same steps by just changing the context and dockerfile
+      matrix:
+        include:
+          - image: api-gateway
+            dockerfile: infra/production/docker/api-gateway.Dockerfile
+          - image: chat-service
+            dockerfile: infra/production/docker/chat-service.Dockerfile
+          - image: dlq-worker
+            dockerfile: infra/production/docker/dlq-worker.Dockerfile
+          - image: driver-service
+            dockerfile: infra/production/docker/driver-service.Dockerfile
+          - image: login-service
+            dockerfile: infra/production/docker/login-service.Dockerfile
+          - image: payment-service
+            dockerfile: infra/production/docker/payment-service.Dockerfile
+          - image: trip-service
+            dockerfile: infra/production/docker/trip-service.Dockerfile
+          - image: web
+            dockerfile: infra/production/docker/web.Dockerfile
+          - image: ws-gateway
+            dockerfile: infra/production/docker/ws-gateway.Dockerfile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials # this is needed to push images to ECR
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push ${{ matrix.image }} # matrix.image is set in the strategy.include section above, this allows us to use the same steps to build and push all images by just changing the context and dockerfile
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }} # this is the ECR registry URI that we get from the login step, we need it to tag the images correctly before pushing. output of a step can be accessed in later steps using steps.{step_id}.outputs.{output_name}. registry is an output provided by the aws-actions/amazon-ecr-login action that contains the URI of the ECR registry we should push to
+        run: |
+          if [ -n "${{ env.ECR_REPOSITORY }}" ]; then
+            REPOSITORY="${{ env.ECR_REPOSITORY }}"
+            IMAGE_TAG="${{ matrix.image }}-${{ github.sha }}"
+            LATEST_TAG="${{ matrix.image }}-latest"
+          elif [ -n "${{ env.ECR_REPOSITORY_PREFIX }}" ]; then
+            REPOSITORY="${{ env.ECR_REPOSITORY_PREFIX }}/${{ matrix.image }}"
+            IMAGE_TAG="${{ github.sha }}"
+            LATEST_TAG="latest"
+          else
+            REPOSITORY="${{ github.event.repository.name }}/${{ matrix.image }}"
+            IMAGE_TAG="${{ github.sha }}"
+            LATEST_TAG="latest"
+          fi
+
+          aws ecr describe-repositories --repository-names "$REPOSITORY" >/dev/null 2>&1 || \
+            aws ecr create-repository --repository-name "$REPOSITORY" >/dev/null
+
+          IMAGE_URI="${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
+          LATEST_URI="${REGISTRY}/${REPOSITORY}:${LATEST_TAG}"
+          docker build \
+            --platform linux/amd64 \
+            -f "${{ matrix.dockerfile }}" \
+            -t "$IMAGE_URI" \
+            -t "$LATEST_URI" \
+            .
+          docker push "$IMAGE_URI"
+          docker push "$LATEST_URI"
+
+  deploy-to-eks:
+    name: Deploy to EKS
+    runs-on: ubuntu-latest
+    needs:
+      - preflight
+      - build-and-push-images
+    if: ${{ needs.build-and-push-images.result == 'success' && needs.preflight.outputs.can_k8s_deploy == 'true' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Update kubeconfig for EKS
+        run: aws eks update-kubeconfig --name "${{ secrets.EKS_CLUSTER_NAME }}" --region "${{ env.AWS_REGION }}"
+
+      - name: Render production manifests
+        env:
+          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        run: |
+          mkdir -p rendered
+          cp -R infra/production/k8s/. rendered/
+
+          image_uri() {
+            local image_name="$1"
+            local repository
+            local image_tag
+            if [ -n "${{ env.ECR_REPOSITORY }}" ]; then
+              repository="${{ env.ECR_REPOSITORY }}"
+              image_tag="${image_name}-${{ github.sha }}"
+            elif [ -n "${{ env.ECR_REPOSITORY_PREFIX }}" ]; then
+              repository="${{ env.ECR_REPOSITORY_PREFIX }}/${image_name}"
+              image_tag="${{ github.sha }}"
+            else
+              repository="${{ github.event.repository.name }}/${image_name}"
+              image_tag="${{ github.sha }}"
+            fi
+            echo "${REGISTRY}/${repository}:${image_tag}"
+          }
+
+          IMAGES=(
+            api-gateway
+            chat-service
+            dlq-worker
+            driver-service
+            login-service
+            payment-service
+            trip-service
+            web
+            ws-gateway
+          )
+
+          for image in "${IMAGES[@]}"; do
+            uri="$(image_uri "$image")"
+            find rendered -type f -name '*.yaml' -exec sed -i "s|IMAGE_PLACEHOLDER/${image}|${uri}|g" {} +
+          done
+
+      - name: Apply manifests
+        run: |
+          find rendered -type f -name '*.yaml' -print0 | xargs -0 -n1 kubectl apply -f
+
+  missing-config:
+    name: Missing Config Warning
+    runs-on: ubuntu-latest
+    needs: preflight
+    if: ${{ needs.preflight.outputs.can_deploy != 'true' }}
+
+    steps:
+      - name: Explain required configuration
+        run: |
+          echo "CD was skipped because required repository configuration is missing."
+          echo "Missing: ${{ needs.preflight.outputs.missing }}"
+          echo "Required variables: AWS_REGION"
+          echo "Optional variables: ECR_REPOSITORY (single repo mode), ECR_REPOSITORY_PREFIX (multi-repo mode)"
+          echo "Required secret: AWS_ROLE_TO_ASSUME"
+          echo "Optional for deploy: EKS_CLUSTER_NAME"

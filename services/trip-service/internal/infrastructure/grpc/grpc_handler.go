@@ -109,8 +109,9 @@ func (h *gRPCHandler) CancelTrip(ctx context.Context, req *pb.CancelTripRequest)
 	if trip.Driver != nil {
 		driverID = trip.Driver.Id
 	}
+	driverAccepted := driverID != ""
 
-	if err := h.publisher.PublishTripCancelled(ctx, tripID, trip.UserID, driverID); err != nil {
+	if err := h.publisher.PublishTripCancelled(ctx, tripID, trip.UserID, driverID, driverAccepted); err != nil {
 		log.Printf("CancelTrip: failed to publish cancellation event for trip %s: %v", tripID, err)
 		// Don't fail the RPC — trip is already marked cancelled in MongoDB.
 	}

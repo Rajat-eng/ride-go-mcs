@@ -8,6 +8,9 @@ metadata:
 data:
   datasources.yaml: |
     apiVersion: 1
+    deleteDatasources:
+      - name: prometheus
+        orgId: 1
     datasources:
       - name: Prometheus
         type: prometheus

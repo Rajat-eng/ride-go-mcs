@@ -84,6 +84,7 @@ func (rl *RateLimiter) WsConnectionGate(ctx context.Context, userID string, max 
 // RefreshWsConnectionGate keeps the gate key alive while the socket is active.
 func (rl *RateLimiter) RefreshWsConnectionGate(ctx context.Context, userID string) {
 	key := fmt.Sprintf("ws:conns:%s", userID)
+	// Reset the TTL to ensure the gate doesn't expire while the connection is active.
 	if err := rl.rdb.Expire(ctx, key, time.Duration(wsConnectionGateTTLSeconds)*time.Second).Err(); err != nil {
 		log.Printf("ws connection gate refresh redis error: %v", err)
 	}
