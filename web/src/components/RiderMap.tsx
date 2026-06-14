@@ -81,7 +81,7 @@ export default function RiderMap({ onRouteSelected }: RiderMapProps) {
                 text,
                 messageID: crypto.randomUUID(),
             },
-        });
+        }, { reportNotReady: true });
     };
 
     const handleCancelTripWithUnsubscribe = () => {

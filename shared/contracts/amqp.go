@@ -13,6 +13,7 @@ const (
 	// Trip events (trip.event.*)
 	TripEventCreated             = "trip.event.created"
 	TripEventDriverAssigned      = "trip.event.driver_assigned"
+	TripEventCompleted           = "trip.event.completed"
 	TripEventNoDriversFound      = "trip.event.no_drivers_found"
 	TripEventDriverNotInterested = "trip.event.driver_not_interested"
 	TripEventCancelled           = "trip.event.cancelled"

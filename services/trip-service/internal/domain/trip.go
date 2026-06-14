@@ -18,12 +18,17 @@ type TripModel struct {
 }
 
 func (t *TripModel) ToProto() *pb.Trip {
+	var driver *pb.TripDriver
+	if t.Driver != nil && t.Driver.Id != "" && t.Driver.Name != "" {
+		driver = t.Driver
+	}
+
 	return &pb.Trip{
 		Id:           t.ID.Hex(),
 		UserID:       t.UserID,
 		SelectedFare: t.RideFare.ToProto(),
 		Status:       t.Status,
-		Driver:       t.Driver,
+		Driver:       driver,
 		Route:        t.RideFare.Route.ToProto(),
 	}
 }

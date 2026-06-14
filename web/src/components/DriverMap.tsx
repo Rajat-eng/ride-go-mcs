@@ -63,7 +63,7 @@ export const DriverMap = ({ packageSlug }: { packageSlug: CarPackageSlug }) => {
         text,
         messageID: crypto.randomUUID(),
       },
-    });
+    }, { reportNotReady: true, queueIfNotReady: true });
   };
 
   return (

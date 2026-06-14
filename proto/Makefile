@@ -5,9 +5,9 @@ GO_OUT := .
 .PHONY: generate-proto
 generate-proto:
 	protoc \
-		--proto_path=$(PROTO_DIR) \ # Specify the directory where your .proto files are located
-		--go_out=$(GO_OUT) \ # Generate Go code for the messages 
-		--go-grpc_out=$(GO_OUT) \ # Generate Go code for gRPC services 
+		--proto_path=$(PROTO_DIR) \
+		--go_out=$(GO_OUT) \
+		--go-grpc_out=$(GO_OUT) \
 		$(PROTO_SRC)
 
 

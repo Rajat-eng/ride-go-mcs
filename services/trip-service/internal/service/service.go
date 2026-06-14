@@ -31,7 +31,8 @@ func (s *TripService) CreateTrip(ctx context.Context, fare *domain.RideFareModel
 		UserID:   fare.UserID,
 		RideFare: fare, // * gives value stored at address fare
 		Status:   "pending",
-		Driver:   &pb.TripDriver{}, // & gives address of empty TripDriver struct
+		// Keep driver nil until a driver is actually assigned.
+		Driver: nil,
 	}
 	return s.repo.CreateTrip(ctx, t)
 }

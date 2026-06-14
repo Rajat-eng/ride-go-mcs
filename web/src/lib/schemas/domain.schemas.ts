@@ -50,8 +50,8 @@ export const RouteFareSchema = z.object({
 // ─── Trip ─────────────────────────────────────────────────────────────────────
 
 export const TripDriverSchema = z.object({
-  id: z.string().optional().default(''),
-  name: z.string().optional().default(''),
+  id: z.string().min(1),
+  name: z.string().min(1),
 });
 
 export const TripSchema = z.object({

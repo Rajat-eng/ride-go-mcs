@@ -42,6 +42,7 @@ export type ServerWsMessage = (
   | TripCreatedRequest
   | NoDriversFoundRequest
   | TripCancelledRequest
+  | TripCompletedRequest
 ) & { topic?: string };
 
 // Messages sent from the client to the server via the websocket
@@ -74,6 +75,13 @@ interface NoDriversFoundRequest {
 
 interface TripCancelledRequest {
   type: TripEvents.Cancelled;
+  data: {
+    tripID: string;
+  };
+}
+
+interface TripCompletedRequest {
+  type: TripEvents.Completed;
   data: {
     tripID: string;
   };

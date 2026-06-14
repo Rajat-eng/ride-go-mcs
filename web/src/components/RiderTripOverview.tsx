@@ -12,6 +12,13 @@ import { TripChatPanel } from "./TripChatPanel";
 import { ChatMessageData } from "../contracts";
 import { PackagesMeta } from "./PackagesMeta";
 
+const formatMoney = (amount: number, currency: string) => new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: currency || 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+}).format(amount);
+
 const getRouteEndpoints = (trip: TripPreview | null) => {
   const coordinates = trip?.route ?? [];
   return {
@@ -45,15 +52,6 @@ export const RiderTripOverview = ({
 }: TripOverviewProps) => {
   const { start, destination } = getRouteEndpoints(trip);
 
-  if (!trip) {
-    return (
-      <TripOverviewCard
-        title="Start a trip"
-        description="Click on the map to set a destination"
-      />
-    )
-  }
-
   if (status === TripEvents.PaymentSessionCreated && paymentSession) {
     return (
       <TripOverviewCard
@@ -64,7 +62,7 @@ export const RiderTripOverview = ({
           <DriverCard driver={assignedDriver} />
 
           <div className="text-sm text-gray-500">
-            <p>Amount: {paymentSession.amount} {paymentSession.currency}</p>
+            <p>Amount: {formatMoney(paymentSession.amount, paymentSession.currency)}</p>
             <p>Trip ID: {paymentSession.tripID}</p>
             {trip?.selectedFare?.packageSlug && (
               <p>Selected package: {PackagesMeta[trip.selectedFare.packageSlug].name} ({trip.selectedFare.packageSlug})</p>
@@ -118,7 +116,7 @@ export const RiderTripOverview = ({
         <div className="flex flex-col gap-4 mb-4">
           <DriverCard driver={assignedDriver} />
           <div className="flex flex-col gap-1 text-sm text-gray-600">
-            <p>Trip ID: {trip.tripID}</p>
+            <p>Trip ID: {trip?.tripID}</p>
             {trip?.selectedFare?.packageSlug && (
               <p>Selected package: {PackagesMeta[trip.selectedFare.packageSlug].name} ({trip.selectedFare.packageSlug})</p>
             )}
@@ -162,6 +160,15 @@ export const RiderTripOverview = ({
           Go back
         </Button>
       </TripOverviewCard>
+    )
+  }
+
+  if (!trip) {
+    return (
+      <TripOverviewCard
+        title="Start a trip"
+        description="Click on the map to set a destination"
+      />
     )
   }
 

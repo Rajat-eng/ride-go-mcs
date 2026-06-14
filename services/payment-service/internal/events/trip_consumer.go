@@ -73,7 +73,7 @@ func (c *TripConsumer) handleTripAccepted(ctx context.Context, payload messaging
 	paymentPayload := messaging.PaymentEventSessionCreatedData{
 		TripID:    payload.TripID,
 		SessionID: paymentSession.StripeSessionID,
-		Amount:    float64(paymentSession.Amount), // Convert from cents to dollars
+		Amount:    float64(paymentSession.Amount) / 100,
 		Currency:  paymentSession.Currency,
 	}
 

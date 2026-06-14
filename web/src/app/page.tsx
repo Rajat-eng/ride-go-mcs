@@ -7,12 +7,14 @@ import icon from 'leaflet/dist/images/marker-icon.png'
 import iconShadow from 'leaflet/dist/images/marker-shadow.png'
 import dynamic from 'next/dynamic'
 import { Button } from "../components/ui/button";
-import { useState, Suspense } from "react";
+import { useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from 'next/navigation';
 import { CarPackageSlug } from '../types';
 import { DriverPackageSelector } from '../components/DriverPackageSelector';
 import { AuthForm } from '../components/AuthForm';
 import { useAuth } from '../hooks/useAuth';
+import { useAppDispatch } from '../store/store';
+import { completeTrip } from '../store/slices/riderSlice';
 
 // Dynamically import components that use Leaflet
 const DriverMap = dynamic(() => import("../components/DriverMap").then(mod => mod.DriverMap), { ssr: false })
@@ -36,10 +38,20 @@ function HomeContent() {
   // Once authenticated the role from JWT is the source of truth.
   const [userType, setUserType] = useState<"driver" | "rider" | null>(null)
   const router = useRouter()
+  const dispatch = useAppDispatch()
   const searchParams = useSearchParams()
   const payment = searchParams.get("payment")
   const [packageSlug, setPackageSlug] = useState<CarPackageSlug | null>(null)
   const { isAuthenticated, user, isRestoringSession } = useAuth();
+  const handledPaymentSuccessRef = useRef(false)
+
+  useEffect(() => {
+    if (payment !== 'success' || handledPaymentSuccessRef.current) {
+      return
+    }
+    handledPaymentSuccessRef.current = true
+    dispatch(completeTrip())
+  }, [dispatch, payment])
 
   // After auth (including OAuth redirect), derive the role from JWT — no useEffect gap.
   const effectiveUserType: "driver" | "rider" | null = isAuthenticated && user?.role

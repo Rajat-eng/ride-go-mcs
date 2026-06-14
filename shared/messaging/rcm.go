@@ -78,19 +78,18 @@ func NewRedisConnectionManager(rdb *redis.Client) *RedisConnectionManager {
 func (rcm *RedisConnectionManager) Add(userID, socketID string, conn *websocket.Conn) {
 	rcm.localCM.Add(socketID, userID, conn)
 
-	replayPending := false
 	rcm.mu.Lock()
 	if _, already := rcm.userSubs[userID]; !already {
 		pubsub := rcm.rdb.Subscribe(rcm.ctx, "user:"+userID+":events")
 		rcm.userSubs[userID] = pubsub
 		go rcm.runUserSubscription(userID, pubsub)
-		replayPending = true
 	}
 	rcm.mu.Unlock()
 
-	if replayPending {
-		go rcm.replayUserStream(userID)
-	}
+	// Always replay the user's pending stream on a fresh socket so a refresh
+	// can recover rides or other missed direct events even when the Redis pubsub
+	// subscription was already active on this node.
+	go rcm.replayUserStream(userID)
 
 	log.Printf("RedisConnectionManager: added socket %s for user %s", socketID, userID)
 }

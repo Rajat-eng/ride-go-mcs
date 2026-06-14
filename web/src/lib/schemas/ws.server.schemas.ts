@@ -80,6 +80,12 @@ export const TripCancelledSchema = z.object({
   data: z.object({ tripID: z.string().min(1) }).optional(),
 });
 
+export const TripCompletedSchema = z.object({
+	 type: z.literal(TripEvents.Completed),
+	 topic: z.string().optional(),
+	 data: z.object({ tripID: z.string().min(1) }).optional(),
+});
+
 export const PaymentSessionCreatedSchema = z.object({
   type: z.literal(TripEvents.PaymentSessionCreated),
   topic: z.string().optional(),
@@ -106,6 +112,7 @@ export const ServerWsMessageSchema = z.discriminatedUnion('type', [
   TripCreatedSchema,
   NoDriversFoundSchema,
   TripCancelledSchema,
+  TripCompletedSchema,
   PaymentSessionCreatedSchema,
   ChatMessageReceivedSchema,
 ]);

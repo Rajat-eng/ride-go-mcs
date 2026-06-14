@@ -12,6 +12,7 @@ const (
 	DriverTripResponseQueue          = "driver_trip_response"
 	NotifyDriverNoDriversFoundQueue  = "notify_driver_no_drivers_found"
 	NotifyDriverAssignQueue          = "notify_driver_assign"
+	NotifyTripCompletedQueue         = "notify_trip_completed"
 	PaymentTripResponseQueue         = "payment_trip_response"
 	NotifyPaymentSessionCreatedQueue = "notify_payment_session_created"
 	NotifyPaymentSuccessQueue        = "payment_success"

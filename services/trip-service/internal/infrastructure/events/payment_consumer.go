@@ -42,13 +42,39 @@ func (c *paymentConsumer) Listen() error {
 			return err
 		}
 
-		log.Printf("Trip has been completed and payed.")
+		log.Printf("Trip payment succeeded; marking trip completed.")
 
-		return c.service.UpdateTrip(
+		if err := c.service.UpdateTrip(
 			ctx,
 			payload.TripID,
-			"payed",
+			"completed",
 			nil,
-		)
+		); err != nil {
+			return err
+		}
+
+		completedPayload, err := json.Marshal(map[string]string{
+			"tripID": payload.TripID,
+		})
+		if err != nil {
+			return err
+		}
+
+		if err := c.rabbitmq.PublishMessage(ctx, contracts.TripEventCompleted, contracts.AmqpMessage{
+			OwnerID: payload.UserID,
+			Data:    completedPayload,
+		}); err != nil {
+			return err
+		}
+		if payload.DriverID != "" {
+			if err := c.rabbitmq.PublishMessage(ctx, contracts.TripEventCompleted, contracts.AmqpMessage{
+				OwnerID: payload.DriverID,
+				Data:    completedPayload,
+			}); err != nil {
+				return err
+			}
+		}
+
+		return nil
 	})
 }

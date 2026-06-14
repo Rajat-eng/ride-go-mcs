@@ -42,6 +42,11 @@ const driverSlice = createSlice({
     setError(state, action: PayloadAction<string | null>) {
       state.error = action.payload;
     },
+    completeTrip(state) {
+      state.tripStatus = TripEvents.Completed;
+      state.requestedTrip = null;
+      state.chatMessages = [];
+    },
     resetTrip(state) {
       state.tripStatus = null;
       state.requestedTrip = null;
@@ -60,6 +65,7 @@ export const {
   setTripStatus,
   addChatMessage,
   setError,
+  completeTrip,
   resetTrip,
   clearState,
 } = driverSlice.actions;

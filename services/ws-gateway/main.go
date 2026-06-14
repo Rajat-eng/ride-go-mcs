@@ -102,6 +102,12 @@ func main() {
 	}
 	log.Println("Cancel consumer started")
 
+	psc := newPaymentSuccessConsumer(rabbitmq, connManager)
+	if err := psc.Start(); err != nil {
+		log.Fatalf("Failed to start payment success consumer: %v", err)
+	}
+	log.Println("Payment success consumer started")
+
 	mux := http.NewServeMux()
 
 	mux.Handle("/", tracing.WrapHandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -64,6 +64,16 @@ const riderSlice = createSlice({
     setError(state, action: PayloadAction<string | null>) {
       state.error = action.payload;
     },
+    completeTrip(state) {
+      state.tripStatus = TripEvents.Completed;
+      state.paymentSession = null;
+      state.trip = null;
+      state.destination = null;
+      state.assignedDriver = null;
+      state.assignedDriverLocation = null;
+      state.chatMessages = [];
+      state.drivers = [];
+    },
     resetTrip(state) {
       state.tripStatus = null;
       state.paymentSession = null;
@@ -90,6 +100,7 @@ export const {
   setTrip,
   setDestination,
   setError,
+  completeTrip,
   resetTrip,
   clearState,
 } = riderSlice.actions;

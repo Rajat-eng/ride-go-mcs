@@ -1,5 +1,8 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 
+const ERROR_DEDUPE_WINDOW_MS = 8000;
+const MAX_VISIBLE_ERRORS = 3;
+
 export interface AppError {
   id: string;
   message: string;
@@ -20,10 +23,26 @@ const uiSlice = createSlice({
   initialState,
   reducers: {
     addError(state, action: PayloadAction<Omit<AppError, 'id'>>) {
+      const message = action.payload.message.trim();
+      const timestamp = action.payload.timestamp;
+
+      const recentlySeenSameError = state.errors.some(
+        (error) => error.message === message && (timestamp - error.timestamp) < ERROR_DEDUPE_WINDOW_MS,
+      );
+
+      if (recentlySeenSameError) {
+        return;
+      }
+
       state.errors.push({
         ...action.payload,
-        id: `${action.payload.timestamp}-${Math.random().toString(36).slice(2, 9)}`,
+        message,
+        id: `${timestamp}-${Math.random().toString(36).slice(2, 9)}`,
       });
+
+      if (state.errors.length > MAX_VISIBLE_ERRORS) {
+        state.errors = state.errors.slice(state.errors.length - MAX_VISIBLE_ERRORS);
+      }
     },
     dismissError(state, action: PayloadAction<string>) {
       state.errors = state.errors.filter((e) => e.id !== action.payload);

@@ -11,6 +11,13 @@ interface StripePaymentButtonProps {
 
 const buildTimeStripePublicKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ""
 
+const formatMoney = (amount: number, currency: string) => new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: currency || 'USD',
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+}).format(amount);
+
 export const StripePaymentButton = ({
   paymentSession,
   isLoading = false,
@@ -106,7 +113,7 @@ export const StripePaymentButton = ({
       disabled={isLoading}
       className="w-full"
     >
-      {isLoading ? "Loading..." : `Pay ${paymentSession.amount} ${paymentSession.currency}`}
+      {isLoading ? "Loading..." : `Pay ${formatMoney(paymentSession.amount, paymentSession.currency)}`}
     </Button>
   )
 } 
