@@ -11,9 +11,9 @@ permissions:
   id-token: write
 
 env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-  ECR_REPOSITORY_PREFIX: ${{ vars.ECR_REPOSITORY_PREFIX }}
+  AWS_REGION: ${{ vars.AWS_REGION }} #ap-south-1
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }} #ride-go-mcs
+  ECR_REPOSITORY_PREFIX: ${{ vars.ECR_REPOSITORY_PREFIX }} #ride-go-mcs
 
 jobs:
   preflight:
@@ -28,8 +28,8 @@ jobs:
       - name: Check required variables and secrets
         id: validate
         env:
-          AWS_REGION: ${{ vars.AWS_REGION }}
-          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          AWS_REGION: ${{ vars.AWS_REGION }} 
+          AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }} #secrets from 
           EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
         run: |
           missing=()
