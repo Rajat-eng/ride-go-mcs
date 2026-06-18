@@ -2,7 +2,11 @@ name: CD
 
 on:
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
     branches:
       - main
 
@@ -19,6 +23,7 @@ jobs:
   preflight:
     name: Validate CD Configuration
     runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }} # only run this job if the workflow was triggered manually or if the CI workflow completed successfully. this prevents us from deploying if the CI workflow failed
     outputs:
       can_deploy: ${{ steps.validate.outputs.can_deploy }} # ouptut whether we can deploy at all. this is used to decide whether to run the rest of the workflow or not
       can_k8s_deploy: ${{ steps.validate.outputs.can_k8s_deploy }} # output whether we can deploy to k8s. if not, we might still be able to push images, so this is used to decide whether to run the deploy-to-eks job or not
