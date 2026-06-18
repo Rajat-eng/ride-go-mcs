@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+mapfile -t staged_go_files < <(git diff --cached --name-only --diff-filter=ACMR -- '*.go')
+
+if [ ${#staged_go_files[@]} -eq 0 ]; then
+  exit 0
+fi
+
+echo "pre-commit: formatting staged Go files with gofmt..."
+
+# gofmt prints parse errors with file:line:column if syntax is invalid.
+gofmt -w "${staged_go_files[@]}"
+
+# Re-stage because gofmt may rewrite files.
+git add "${staged_go_files[@]}"
+
+# Defensive check in case any file still differs from gofmt output.
+unformatted="$(gofmt -l "${staged_go_files[@]}")"
+if [ -n "$unformatted" ]; then
+  echo "pre-commit: gofmt still reports formatting issues:"
+  echo "$unformatted"
+  exit 1
+fi
+
+echo "pre-commit: gofmt check passed."

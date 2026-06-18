@@ -108,6 +108,22 @@ Optional secret for automatic deploy step:
 
 If `EKS_CLUSTER_NAME` is not set, image publishing still runs and the deploy step is skipped.
 
+## Pre-commit formatting hook
+
+To automatically format staged Go files before every commit:
+
+```bash
+bash scripts/install-git-hooks.sh
+```
+
+What it does:
+
+- Runs `gofmt -w` on staged `*.go` files.
+- Re-stages files changed by `gofmt`.
+- Stops commit if formatting still fails (or if a file has syntax errors).
+
+You can re-run the installer anytime; it is safe to run multiple times.
+
 ## Monitor
 
 ```bash
