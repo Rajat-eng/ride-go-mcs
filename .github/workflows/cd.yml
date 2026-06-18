@@ -160,6 +160,19 @@ jobs:
       - name: Update kubeconfig for EKS
         run: aws eks update-kubeconfig --name "${{ secrets.EKS_CLUSTER_NAME }}" --region "${{ env.AWS_REGION }}"
 
+      - name: Ensure External Secrets CRDs are installed
+        run: |
+          set -euo pipefail
+
+          EXTERNAL_SECRETS_CRDS_URL="https://raw.githubusercontent.com/external-secrets/external-secrets/v0.14.4/deploy/crds/bundle.yaml"
+          kubectl apply -f "$EXTERNAL_SECRETS_CRDS_URL"
+
+          kubectl wait --for=condition=Established --timeout=120s crd/clusterexternalsecrets.external-secrets.io
+          kubectl wait --for=condition=Established --timeout=120s crd/clustersecretstores.external-secrets.io
+          kubectl wait --for=condition=Established --timeout=120s crd/externalsecrets.external-secrets.io
+          kubectl wait --for=condition=Established --timeout=120s crd/pushsecrets.external-secrets.io
+          kubectl wait --for=condition=Established --timeout=120s crd/secretstores.external-secrets.io
+
       - name: Render production manifests
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
@@ -200,6 +213,25 @@ jobs:
             uri="$(image_uri "$image")"
             find rendered -type f -name '*.yaml' -exec sed -i "s|IMAGE_PLACEHOLDER/${image}|${uri}|g" {} +
           done
+
+      - name: Ensure External Secrets API version compatibility
+        run: |
+          set -euo pipefail
+
+          if kubectl explain secretstore --api-version=external-secrets.io/v1 >/dev/null 2>&1; then
+            echo "External Secrets v1 API is available"
+            exit 0
+          fi
+
+          if kubectl explain secretstore --api-version=external-secrets.io/v1beta1 >/dev/null 2>&1; then
+            echo "External Secrets v1 API is unavailable; falling back manifests to v1beta1"
+            find rendered -type f \( -name 'secretstore-aws-secretsmanager.yaml' -o -name 'externalsecrets.yaml' \) \
+              -exec sed -i 's|external-secrets.io/v1|external-secrets.io/v1beta1|g' {} +
+            exit 0
+          fi
+
+          echo "Neither external-secrets.io/v1 nor external-secrets.io/v1beta1 is available in this cluster"
+          exit 1
 
       - name: Apply manifests
         run: |
