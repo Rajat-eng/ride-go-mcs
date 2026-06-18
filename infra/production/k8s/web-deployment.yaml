@@ -32,9 +32,15 @@ spec:
             - name: NODE_ENV
               value: "production"
             - name: GATEWAY_URL
-              value: "http://api-gateway:8081"
+              valueFrom:
+                configMapKeyRef:
+                  key: GATEWAY_URL
+                  name: app-config
             - name: NEXT_PUBLIC_WEBSOCKET_URL
-              value: "ws://ws-gateway:8082/ws"
+              valueFrom:
+                configMapKeyRef:
+                  key: NEXT_PUBLIC_WEBSOCKET_URL
+                  name: app-config
             - name: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
               valueFrom:
                 secretKeyRef:
