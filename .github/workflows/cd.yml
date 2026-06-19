@@ -176,6 +176,13 @@ jobs:
           set -euo pipefail
 
           EXTERNAL_SECRETS_CRDS_URL="https://raw.githubusercontent.com/external-secrets/external-secrets/v0.14.4/deploy/crds/bundle.yaml"
+
+          if kubectl explain secretstore --api-version=external-secrets.io/v1 >/dev/null 2>&1 && \
+             kubectl explain externalsecret --api-version=external-secrets.io/v1 >/dev/null 2>&1; then
+            echo "External Secrets v1 APIs are already available; skipping CRD apply to avoid downgrading cluster CRDs."
+            exit 0
+          fi
+
           kubectl apply -f "$EXTERNAL_SECRETS_CRDS_URL"
 
           kubectl wait --for=condition=Established --timeout=120s crd/clusterexternalsecrets.external-secrets.io
