@@ -9,8 +9,6 @@ interface StripePaymentButtonProps {
   isLoading?: boolean
 }
 
-const buildTimeStripePublicKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ""
-
 const formatMoney = (amount: number, currency: string) => new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: currency || 'USD',
@@ -22,14 +20,10 @@ export const StripePaymentButton = ({
   paymentSession,
   isLoading = false,
 }: StripePaymentButtonProps) => {
-  const [stripePublicKey, setStripePublicKey] = useState(buildTimeStripePublicKey)
-  const [isStripeConfigLoading, setIsStripeConfigLoading] = useState(!buildTimeStripePublicKey)
+  const [stripePublicKey, setStripePublicKey] = useState("")
+  const [isStripeConfigLoading, setIsStripeConfigLoading] = useState(true)
 
   useEffect(() => {
-    if (buildTimeStripePublicKey) {
-      return
-    }
-
     let isMounted = true
 
     const loadStripeConfig = async () => {
@@ -66,7 +60,7 @@ export const StripePaymentButton = ({
 
   const handlePayment = async () => {
     if (!stripePublicKey) {
-      console.error("Missing NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY")
+      console.error("Missing Stripe publishable key")
       return
     }
 
@@ -102,7 +96,7 @@ export const StripePaymentButton = ({
         disabled
         className="w-full bg-red-500 text-white"
       >
-        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY is not set
+        Stripe publishable key is not set
       </Button>
     )
   }

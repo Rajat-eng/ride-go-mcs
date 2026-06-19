@@ -176,13 +176,33 @@ jobs:
           set -euo pipefail
 
           EXTERNAL_SECRETS_CRDS_URL="https://raw.githubusercontent.com/external-secrets/external-secrets/v0.14.4/deploy/crds/bundle.yaml"
-          kubectl apply -f "$EXTERNAL_SECRETS_CRDS_URL"
+          curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors "$EXTERNAL_SECRETS_CRDS_URL" -o /tmp/external-secrets-crds.yaml
+          kubectl apply -f /tmp/external-secrets-crds.yaml
 
-          kubectl wait --for=condition=Established --timeout=120s crd/clusterexternalsecrets.external-secrets.io
-          kubectl wait --for=condition=Established --timeout=120s crd/clustersecretstores.external-secrets.io
-          kubectl wait --for=condition=Established --timeout=120s crd/externalsecrets.external-secrets.io
-          kubectl wait --for=condition=Established --timeout=120s crd/pushsecrets.external-secrets.io
-          kubectl wait --for=condition=Established --timeout=120s crd/secretstores.external-secrets.io
+          REQUIRED_CRDS=(
+            "clustersecretstores.external-secrets.io"
+            "externalsecrets.external-secrets.io"
+            "secretstores.external-secrets.io"
+          )
+
+          OPTIONAL_CRDS=(
+            "clusterexternalsecrets.external-secrets.io"
+            "pushsecrets.external-secrets.io"
+          )
+
+          for crd in "${REQUIRED_CRDS[@]}"; do
+            kubectl wait --for=condition=Established --timeout=180s "crd/${crd}"
+          done
+
+          for crd in "${OPTIONAL_CRDS[@]}"; do
+            if kubectl get crd "$crd" >/dev/null 2>&1; then
+              kubectl wait --for=condition=Established --timeout=180s "crd/${crd}"
+            else
+              echo "Optional CRD not present in bundle: $crd"
+            fi
+          done
+
+          kubectl get crd | grep 'external-secrets.io'
 
       - name: Install External Secrets controller
         run: |

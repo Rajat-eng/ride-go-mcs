@@ -46,11 +46,6 @@ spec:
                 configMapKeyRef:
                   key: NEXT_PUBLIC_WEBSOCKET_URL
                   name: app-config
-            - name: NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: stripe-secrets
-                  key: stripe-publishable-key
             - name: STRIPE_PUBLISHABLE_KEY
               valueFrom:
                 secretKeyRef:
