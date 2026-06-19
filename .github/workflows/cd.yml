@@ -175,10 +175,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          EXTERNAL_SECRETS_CRDS_URL="https://raw.githubusercontent.com/external-secrets/external-secrets/v0.14.4/deploy/crds/bundle.yaml"
-          curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors "$EXTERNAL_SECRETS_CRDS_URL" -o /tmp/external-secrets-crds.yaml
-          kubectl apply -f /tmp/external-secrets-crds.yaml
-
           REQUIRED_CRDS=(
             "clustersecretstores.external-secrets.io"
             "externalsecrets.external-secrets.io"
@@ -189,6 +185,22 @@ jobs:
             "clusterexternalsecrets.external-secrets.io"
             "pushsecrets.external-secrets.io"
           )
+
+          missing_required=0
+          for crd in "${REQUIRED_CRDS[@]}"; do
+            if ! kubectl get crd "$crd" >/dev/null 2>&1; then
+              echo "Missing required CRD: $crd"
+              missing_required=1
+            fi
+          done
+
+          if [ "$missing_required" -eq 1 ]; then
+            EXTERNAL_SECRETS_CRDS_URL="https://raw.githubusercontent.com/external-secrets/external-secrets/v0.14.4/deploy/crds/bundle.yaml"
+            curl -fsSL --retry 5 --retry-delay 3 --retry-all-errors "$EXTERNAL_SECRETS_CRDS_URL" -o /tmp/external-secrets-crds.yaml
+            kubectl apply -f /tmp/external-secrets-crds.yaml
+          else
+            echo "Required External Secrets CRDs already exist; skipping CRD bundle apply to avoid storage-version conflicts."
+          fi
 
           for crd in "${REQUIRED_CRDS[@]}"; do
             kubectl wait --for=condition=Established --timeout=180s "crd/${crd}"
