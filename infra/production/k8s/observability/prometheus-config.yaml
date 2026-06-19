@@ -1,0 +1,68 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: default
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    rule_files:
+      - /etc/prometheus/alerts.yml
+
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets: ["localhost:9090"]
+
+      - job_name: otel-collector
+        static_configs:
+          - targets: ["otel-collector:9464"]
+
+  alerts.yml: |
+    groups:
+      - name: observability-core
+        rules:
+          - alert: OTelCollectorDown
+            expr: up{job="otel-collector"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: OTel collector is down
+              description: Prometheus cannot scrape otel-collector for over 2 minutes.
+
+          - alert: PrometheusTargetDown
+            expr: up{job="prometheus"} == 0
+            for: 2m
+            labels:
+              severity: critical
+            annotations:
+              summary: Prometheus self target is down
+              description: Prometheus target localhost:9090 has been down for over 2 minutes.
+
+          - alert: CollectorLokiExportFailures
+            expr: sum(rate(otelcol_exporter_send_failed_log_records{exporter="loki"}[5m])) > 0
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: Loki log export failures detected
+              description: OTel collector is failing to export some log records to Loki for over 5 minutes.
+
+      - name: platform-traffic
+        rules:
+          - alert: ApiGateway5xxRatioHigh
+            expr: |
+              sum(rate(ride_http_requests_total{service="api-gateway",status=~"5.."}[5m]))
+              /
+              clamp_min(sum(rate(ride_http_requests_total{service="api-gateway"}[5m])), 1)
+              > 0.05
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: High API 5xx ratio
+              description: API gateway 5xx ratio has stayed above 5% for 10 minutes.

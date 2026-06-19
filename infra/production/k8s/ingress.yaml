@@ -9,10 +9,10 @@ metadata:
     alb.ingress.kubernetes.io/healthcheck-path: /
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
     alb.ingress.kubernetes.io/ssl-redirect: "443"
-    alb.ingress.kubernetes.io/certificate-arn: REPLACE_WITH_ACM_CERTIFICATE_ARN # this should be replaced with the actual ACM certificate ARN for your domain
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:ap-south-1:326306381458:certificate/e81beb22-f175-4cfa-8b34-d5f4923c8e5b # this should be replaced with the actual ACM certificate ARN for your domain
 spec:
   rules:
-    - host: app.example.com
+    - host: app.rexy.co.in
       http:
         paths:
           - path: /
@@ -22,7 +22,7 @@ spec:
                 name: web
                 port:
                   number: 3000
-    - host: api.example.com
+    - host: api.rexy.co.in
       http:
         paths:
           - path: /
@@ -32,7 +32,7 @@ spec:
                 name: api-gateway
                 port:
                   number: 8081
-    - host: ws.example.com
+    - host: ws.rexy.co.in
       http:
         paths:
           - path: /

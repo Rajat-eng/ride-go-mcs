@@ -157,6 +157,9 @@ jobs:
       - name: Setup kubectl
         uses: azure/setup-kubectl@v4
 
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
       - name: Update kubeconfig for EKS
         run: aws eks update-kubeconfig --name "${{ secrets.EKS_CLUSTER_NAME }}" --region "${{ env.AWS_REGION }}"
 
@@ -172,6 +175,22 @@ jobs:
           kubectl wait --for=condition=Established --timeout=120s crd/externalsecrets.external-secrets.io
           kubectl wait --for=condition=Established --timeout=120s crd/pushsecrets.external-secrets.io
           kubectl wait --for=condition=Established --timeout=120s crd/secretstores.external-secrets.io
+
+      - name: Install External Secrets controller
+        run: |
+          set -euo pipefail
+
+          helm repo add external-secrets https://charts.external-secrets.io
+          helm repo update
+
+          helm upgrade --install external-secrets external-secrets/external-secrets \
+            --namespace external-secrets \
+            --create-namespace \
+            --version 0.14.4 \
+            --set installCRDs=false \
+            --set serviceAccount.name=external-secrets
+
+          kubectl rollout status deployment/external-secrets -n external-secrets --timeout=180s
 
       - name: Render production manifests
         env:
@@ -235,7 +254,144 @@ jobs:
 
       - name: Apply manifests
         run: |
-          find rendered -type f -name '*.yaml' -print0 | xargs -0 -n1 kubectl apply -f
+          set -euo pipefail
+
+          apply_if_exists() {
+            local file="$1"
+            if [ -f "$file" ]; then
+              kubectl apply -f "$file"
+            fi
+          }
+
+          # 1) Cluster/runtime prerequisites first
+          apply_if_exists rendered/storageclass-gp3-csi.yaml
+          apply_if_exists rendered/app-config.yaml
+
+          # 1b) Observability config and sinks
+          apply_if_exists rendered/observability/loki-config.yaml
+          apply_if_exists rendered/observability/otel-gateway-configmap.yaml
+          apply_if_exists rendered/observability/otel-agent-configmap.yaml
+          apply_if_exists rendered/observability/prometheus-config.yaml
+          apply_if_exists rendered/observability/grafana-datasources.yaml
+          apply_if_exists rendered/observability/grafana-dashboard-providers.yaml
+          apply_if_exists rendered/observability/grafana-dashboards.yaml
+
+          apply_if_exists rendered/observability/loki-statefulset.yaml
+          apply_if_exists rendered/observability/collector-gateway-deployment.yaml
+          apply_if_exists rendered/observability/collector-agent-daemonset.yaml
+          apply_if_exists rendered/observability/prometheus-deployment.yaml
+          apply_if_exists rendered/observability/grafana-deployment.yaml
+
+          # 2) Secrets integration before workloads
+          apply_if_exists rendered/secretstore-aws-secretsmanager.yaml
+          apply_if_exists rendered/externalsecrets.yaml
+
+          kubectl wait --for=condition=Ready --timeout=180s secretstore/aws-secretsmanager -n default
+          kubectl wait --for=condition=Ready --timeout=180s externalsecret --all -n default
+
+          # 3) Stateful dependencies
+          apply_if_exists rendered/postgres-deployment.yaml
+          apply_if_exists rendered/rabbitmq-deployment.yaml
+          apply_if_exists rendered/redis-deployment.yaml
+
+          # 4) Application workloads
+          for f in \
+            rendered/login-service-deployment.yaml \
+            rendered/driver-service-deployment.yaml \
+            rendered/trip-service-deployment.yaml \
+            rendered/payment-service-deployment.yaml \
+            rendered/chat-service-deployment.yaml \
+            rendered/ws-gateway-deployment.yaml \
+            rendered/api-gateway-deployment.yaml \
+            rendered/web-deployment.yaml \
+            rendered/dlq-worker-deployment.yaml
+          do
+            apply_if_exists "$f"
+          done
+
+          # 5) Public entrypoint last
+          apply_if_exists rendered/ingress.yaml
+
+      - name: Wait for core workloads
+        run: |
+          set -euo pipefail
+
+          # Observability core
+          kubectl rollout status deployment/otel-collector-gateway -n default --timeout=300s
+          kubectl rollout status statefulset/loki -n default --timeout=300s
+          kubectl rollout status deployment/prometheus -n default --timeout=300s
+          kubectl rollout status deployment/grafana -n default --timeout=300s
+
+          # Stateful dependencies first
+          kubectl rollout status statefulset/rabbitmq -n default --timeout=300s
+          kubectl rollout status statefulset/redis -n default --timeout=300s
+
+          # Core platform workloads
+          kubectl rollout status deployment/postgres -n default --timeout=300s
+          kubectl rollout status deployment/login-service -n default --timeout=300s
+          kubectl rollout status deployment/driver-service -n default --timeout=300s
+          kubectl rollout status deployment/trip-service -n default --timeout=300s
+          kubectl rollout status deployment/payment-service -n default --timeout=300s
+          kubectl rollout status deployment/chat-service -n default --timeout=300s
+          kubectl rollout status deployment/ws-gateway -n default --timeout=300s
+          kubectl rollout status deployment/api-gateway -n default --timeout=300s
+          kubectl rollout status deployment/web -n default --timeout=300s
+
+      - name: Collect diagnostics on failure
+        if: ${{ failure() }}
+        run: |
+          set +e
+          mkdir -p diagnostics
+
+          kubectl get pods -A -o wide > diagnostics/pods.txt
+          kubectl get svc -A > diagnostics/services.txt
+          kubectl get ingress -A > diagnostics/ingress.txt
+          kubectl get endpoints -n default > diagnostics/endpoints-default.txt
+          kubectl get externalsecret -n default > diagnostics/externalsecrets.txt
+          kubectl get secretstore -n default > diagnostics/secretstores.txt
+          kubectl get pvc -n default > diagnostics/pvc-default.txt
+          kubectl get events -A --sort-by=.lastTimestamp > diagnostics/events.txt
+
+          # Collect describe + logs for not-ready pods across namespaces.
+          kubectl get pods -A --no-headers | awk '
+            {
+              split($3, a, "/");
+              ready=(a[1]==a[2]);
+              status=$4;
+              if (!ready || (status != "Running" && status != "Completed")) {
+                print $1, $2;
+              }
+            }
+          ' > diagnostics/not_ready_pods.txt
+
+          while read -r ns pod; do
+            [ -z "$ns" ] && continue
+            echo "=== ${ns}/${pod} describe ===" >> diagnostics/pod-describe.txt
+            kubectl describe pod -n "$ns" "$pod" >> diagnostics/pod-describe.txt 2>&1
+            echo >> diagnostics/pod-describe.txt
+
+            echo "=== ${ns}/${pod} logs ===" >> diagnostics/pod-logs.txt
+            kubectl logs -n "$ns" "$pod" --all-containers --tail=300 >> diagnostics/pod-logs.txt 2>&1
+            echo >> diagnostics/pod-logs.txt
+
+            echo "=== ${ns}/${pod} previous logs ===" >> diagnostics/pod-logs-previous.txt
+            kubectl logs -n "$ns" "$pod" --all-containers --previous --tail=300 >> diagnostics/pod-logs-previous.txt 2>&1
+            echo >> diagnostics/pod-logs-previous.txt
+          done < diagnostics/not_ready_pods.txt
+
+          # Surface key diagnostics directly in workflow output.
+          echo "----- NOT READY PODS -----"
+          cat diagnostics/not_ready_pods.txt || true
+          echo "----- LAST EVENTS -----"
+          tail -n 200 diagnostics/events.txt || true
+
+      - name: Upload diagnostics artifact
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-diagnostics-${{ github.run_id }}
+          path: diagnostics
+          if-no-files-found: ignore
 
   missing-config:
     name: Missing Config Warning
