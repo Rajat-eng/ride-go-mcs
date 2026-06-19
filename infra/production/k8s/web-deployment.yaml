@@ -31,6 +31,11 @@ spec:
           env:
             - name: NODE_ENV
               value: "production"
+            - name: NEXT_PUBLIC_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: NEXT_PUBLIC_API_URL
+                  name: app-config
             - name: GATEWAY_URL
               valueFrom:
                 configMapKeyRef:

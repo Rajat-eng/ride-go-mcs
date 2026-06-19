@@ -123,8 +123,16 @@ jobs:
 
           IMAGE_URI="${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
           LATEST_URI="${REGISTRY}/${REPOSITORY}:${LATEST_TAG}"
+
+          BUILD_ARGS=()
+          if [ "${{ matrix.image }}" = "web" ]; then
+            BUILD_ARGS+=(--build-arg "NEXT_PUBLIC_API_URL=https://api.rexy.co.in")
+            BUILD_ARGS+=(--build-arg "NEXT_PUBLIC_WEBSOCKET_URL=wss://ws.rexy.co.in/ws")
+          fi
+
           docker build \
             --platform linux/amd64 \
+            "${BUILD_ARGS[@]}" \
             -f "${{ matrix.dockerfile }}" \
             -t "$IMAGE_URI" \
             -t "$LATEST_URI" \
@@ -188,6 +196,7 @@ jobs:
             --create-namespace \
             --version 0.14.4 \
             --set installCRDs=false \
+            --set processClusterExternalSecret=false \
             --set serviceAccount.name=external-secrets
 
           kubectl rollout status deployment/external-secrets -n external-secrets --timeout=180s
