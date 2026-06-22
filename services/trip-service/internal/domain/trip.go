@@ -50,6 +50,7 @@ type TripService interface {
 	GenerateTripFares(ctx context.Context, fares []*RideFareModel, userID string, route *tripTypes.OSRMApiResponse) (*FarePreview, error)
 	GetAndValidateFare(ctx context.Context, fareID, userID string) (*RideFareModel, error)
 	GetTripByID(ctx context.Context, id string) (*TripModel, error)
+	CompleteTrip(ctx context.Context, tripID string) (*TripModel, error)
 	UpdateTrip(ctx context.Context, tripID string, status string, driver *pb.TripDriver) error
 	CancelTrip(ctx context.Context, tripID, requesterUserID string) (*TripModel, error)
 }

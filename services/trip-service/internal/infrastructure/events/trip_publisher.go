@@ -46,6 +46,34 @@ func (p *TripEventPublisher) PublishTripCreated(ctx context.Context, trip *domai
 	})
 }
 
+// PublishTripCompleted notifies both rider and driver that the trip is done.
+func (p *TripEventPublisher) PublishTripCompleted(ctx context.Context, trip *domain.TripModel) error {
+	completedPayload, err := json.Marshal(map[string]string{
+		"tripID": trip.ID.Hex(),
+	})
+	if err != nil {
+		return err
+	}
+
+	if err := p.rabbitMQ.PublishMessage(ctx, contracts.TripEventCompleted, contracts.AmqpMessage{
+		OwnerID: trip.UserID,
+		Data:    completedPayload,
+	}); err != nil {
+		return err
+	}
+
+	if trip.Driver != nil && trip.Driver.Id != "" {
+		if err := p.rabbitMQ.PublishMessage(ctx, contracts.TripEventCompleted, contracts.AmqpMessage{
+			OwnerID: trip.Driver.Id,
+			Data:    completedPayload,
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // PublishTripCancelled notifies both rider and driver (if assigned) about the cancellation.
 // It publishes a single AMQP message whose Data contains the full TripCancelledData so the
 // ws-gateway cancel consumer can fan-out to both parties in one shot.

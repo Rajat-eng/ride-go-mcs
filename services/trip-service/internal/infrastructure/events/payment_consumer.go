@@ -13,14 +13,16 @@ import (
 )
 
 type paymentConsumer struct {
-	rabbitmq *messaging.RabbitMQ
-	service  domain.TripService
+	rabbitmq  *messaging.RabbitMQ
+	service   domain.TripService
+	publisher *TripEventPublisher
 }
 
-func NewPaymentConsumer(rabbitmq *messaging.RabbitMQ, service domain.TripService) *paymentConsumer {
+func NewPaymentConsumer(rabbitmq *messaging.RabbitMQ, service domain.TripService, publisher *TripEventPublisher) *paymentConsumer {
 	return &paymentConsumer{
-		rabbitmq: rabbitmq,
-		service:  service,
+		rabbitmq:  rabbitmq,
+		service:   service,
+		publisher: publisher,
 	}
 }
 
@@ -44,35 +46,13 @@ func (c *paymentConsumer) Listen() error {
 
 		log.Printf("Trip payment succeeded; marking trip completed.")
 
-		if err := c.service.UpdateTrip(
-			ctx,
-			payload.TripID,
-			"completed",
-			nil,
-		); err != nil {
-			return err
-		}
-
-		completedPayload, err := json.Marshal(map[string]string{
-			"tripID": payload.TripID,
-		})
+		trip, err := c.service.CompleteTrip(ctx, payload.TripID)
 		if err != nil {
 			return err
 		}
 
-		if err := c.rabbitmq.PublishMessage(ctx, contracts.TripEventCompleted, contracts.AmqpMessage{
-			OwnerID: payload.UserID,
-			Data:    completedPayload,
-		}); err != nil {
+		if err := c.publisher.PublishTripCompleted(ctx, trip); err != nil {
 			return err
-		}
-		if payload.DriverID != "" {
-			if err := c.rabbitmq.PublishMessage(ctx, contracts.TripEventCompleted, contracts.AmqpMessage{
-				OwnerID: payload.DriverID,
-				Data:    completedPayload,
-			}); err != nil {
-				return err
-			}
 		}
 
 		return nil

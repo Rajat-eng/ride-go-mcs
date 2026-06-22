@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
 	"ride-sharing/services/trip-service/internal/domain"
 	"ride-sharing/shared/types"
 )
@@ -30,7 +31,7 @@ func (s *HttpHandler) HandleTripPreview(w http.ResponseWriter, r *http.Request) 
 	t, err := s.Service.GetRoute(ctx, &reqBody.Pickup, &reqBody.Destination)
 	if err != nil {
 		log.Println("error in getting route", err)
-		http.Error(w, "failed to get route", http.StatusInternalServerError) // 500 - internal server error
+		http.Error(w, "failed to get route", http.StatusInternalServerError)
 		return
 	}
 	writeJSON(w, http.StatusOK, t)

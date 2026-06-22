@@ -159,6 +159,23 @@ func (s *TripService) GetTripByID(ctx context.Context, id string) (*domain.TripM
 	return s.repo.GetTripByID(ctx, id)
 }
 
+func (s *TripService) CompleteTrip(ctx context.Context, tripID string) (*domain.TripModel, error) {
+	trip, err := s.repo.GetTripByID(ctx, tripID)
+	if err != nil {
+		return nil, fmt.Errorf("trip not found: %w", err)
+	}
+
+	if trip.Status == "completed" {
+		return trip, nil
+	}
+
+	if err := s.repo.UpdateTrip(ctx, tripID, "completed", nil); err != nil {
+		return nil, fmt.Errorf("failed to complete trip: %w", err)
+	}
+	trip.Status = "completed"
+	return trip, nil
+}
+
 func (s *TripService) UpdateTrip(ctx context.Context, tripID string, status string, driver *pb.TripDriver) error {
 	return s.repo.UpdateTrip(ctx, tripID, status, driver)
 }

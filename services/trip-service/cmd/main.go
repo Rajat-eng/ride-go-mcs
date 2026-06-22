@@ -120,7 +120,7 @@ func main() {
 	}()
 
 	// Start payment consumer
-	paymentConsumer := events.NewPaymentConsumer(rabbitmq, TripService)
+	paymentConsumer := events.NewPaymentConsumer(rabbitmq, TripService, publisher)
 	go func() {
 		if err := paymentConsumer.Listen(); err != nil {
 			log.Fatalf("Failed to listen to the payment consumer message: %v", err)
