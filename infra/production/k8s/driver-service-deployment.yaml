@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: driver-service
-          image: IMAGE_PLACEHOLDER/driver-service
+          image: placeholder/driver-service
           ports:
             - name: grpc
               containerPort: 9092

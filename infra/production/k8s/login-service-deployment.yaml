@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: login-service
-          image: IMAGE_PLACEHOLDER/login-service
+          image: placeholder/login-service
           ports:
             - name: http
               containerPort: 8085

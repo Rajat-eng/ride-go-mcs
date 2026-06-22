@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: payment-service
-          image: IMAGE_PLACEHOLDER/payment-service
+          image: placeholder/payment-service
           ports:
             - containerPort: 9004
           resources:

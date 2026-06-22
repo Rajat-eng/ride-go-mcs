@@ -271,7 +271,7 @@ jobs:
 
           for image in "${IMAGES[@]}"; do
             uri="$(image_uri "$image")"
-            find rendered -type f -name '*.yaml' -exec sed -i "s|IMAGE_PLACEHOLDER/${image}|${uri}|g" {} +
+            find rendered -type f -name '*.yaml' -exec sed -i "s|placeholder/${image}|${uri}|g" {} +
           done
 
       - name: Ensure External Secrets API version compatibility

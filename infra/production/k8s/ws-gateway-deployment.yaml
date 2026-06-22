@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: ws-gateway
-          image: IMAGE_PLACEHOLDER/ws-gateway
+          image: placeholder/ws-gateway
           ports:
             - containerPort: 8082
           resources:

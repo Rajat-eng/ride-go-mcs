@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: api-gateway
-          image: IMAGE_PLACEHOLDER/api-gateway
+          image: placeholder/api-gateway
           ports:
             - containerPort: 8081
           resources:
@@ -40,6 +40,11 @@ spec:
                 secretKeyRef:
                   name: stripe-secrets
                   key: stripe-webhook-key
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-secrets
+                  key: secret
             - name: REDIS_URI
               valueFrom:
                 configMapKeyRef:

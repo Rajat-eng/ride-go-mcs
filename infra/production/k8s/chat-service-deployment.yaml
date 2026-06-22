@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: chat-service
-          image: IMAGE_PLACEHOLDER/chat-service
+          image: placeholder/chat-service
           resources:
             requests:
               memory: "64Mi"

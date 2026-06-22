@@ -14,7 +14,7 @@ spec:
           restartPolicy: OnFailure
           containers:
             - name: dlq-worker
-              image: IMAGE_PLACEHOLDER/dlq-worker
+              image: placeholder/dlq-worker
               imagePullPolicy: IfNotPresent
               env:
                 - name: RABBITMQ_URI

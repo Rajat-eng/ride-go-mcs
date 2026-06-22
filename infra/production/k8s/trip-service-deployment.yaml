@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
         - name: trip-service
-          image: IMAGE_PLACEHOLDER/trip-service
+          image: placeholder/trip-service
           ports:
             - name: http
               containerPort: 8083

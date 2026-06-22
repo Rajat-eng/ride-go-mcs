@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: web
-          image: IMAGE_PLACEHOLDER/web
+          image: placeholder/web
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 3000

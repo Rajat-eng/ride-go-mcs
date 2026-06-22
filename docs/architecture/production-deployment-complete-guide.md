@@ -2,6 +2,8 @@
 
 This is the single source of truth for production deployment in this repository.
 
+Shared cross-repo production contract: `docs/architecture/k8s-prod-shared-contract.md`
+
 It combines:
 
 - beginner step-by-step operations
