@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"ride-sharing/services/trip-service/internal/domain"
 	tripTypes "ride-sharing/services/trip-service/pkg/types"
 	pb "ride-sharing/shared/proto/trip"
@@ -207,4 +208,42 @@ func (s *TripService) CancelTrip(ctx context.Context, tripID, requesterUserID st
 	}
 	trip.Status = "cancelled"
 	return trip, nil
+}
+
+// ValidateTripStatus validates trip status is one of the allowed values
+func ValidateTripStatus(status string) error {
+	validStatuses := map[string]bool{
+		"pending":   true,
+		"accepted":  true,
+		"in_progress": true,
+		"completed": true,
+		"cancelled": true,
+	}
+
+	if !validStatuses[status] {
+		return fmt.Errorf("invalid trip status: %s", status)
+	}
+	return nil
+}
+
+// ValidateCoordinate validates latitude and longitude ranges
+func ValidateCoordinate(lat, lng float64) error {
+	if lat < -90.0 || lat > 90.0 {
+		return fmt.Errorf("latitude must be between -90 and 90, got %f", lat)
+	}
+	if lng < -180.0 || lng > 180.0 {
+		return fmt.Errorf("longitude must be between -180 and 180, got %f", lng)
+	}
+	return nil
+}
+
+// ValidateUserID validates user ID format
+func ValidateUserID(userID string) error {
+	if userID == "" {
+		return fmt.Errorf("user ID cannot be empty")
+	}
+	if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(userID) {
+		return fmt.Errorf("user ID contains invalid characters: %s", userID)
+	}
+	return nil
 }

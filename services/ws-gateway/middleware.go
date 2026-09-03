@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -66,5 +67,42 @@ func wsAuthMiddleware(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, ctxKeyToken, tokenStr)
 		ctx = context.WithValue(ctx, ctxKeyName, name)
 		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+	})}
+
+// ExtractJWTFromHeader extracts JWT from Authorization Bearer header
+func ExtractJWTFromHeader(authHeader string) string {
+	if authHeader == "" {
+		return ""
+	}
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		return ""
+	}
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	if token == "" {
+		return ""
+	}
+	return token
 }
+
+// ExtractUserIDFromToken extracts user_id from JWT claims
+func ExtractUserIDFromToken(claims jwt.MapClaims) (string, error) {
+	userID, ok := claims["user_id"].(string)
+	if !ok || userID == "" {
+		return "", fmt.Errorf("user_id not found or invalid in token claims")
+	}
+	return userID, nil
+}
+
+// ValidateWebSocketContext checks if context has required auth fields
+func ValidateWebSocketContext(ctx context.Context) error {
+	userID, ok := ctx.Value(ctxKeyUserID).(string)
+	if !ok || userID == "" {
+		return fmt.Errorf("missing or invalid userID in context")
+	}
+
+	socketID, ok := ctx.Value(ctxKeySocketID).(string)
+	if !ok || socketID == "" {
+		return fmt.Errorf("missing or invalid socketID in context")
+	}
+
+	return nil}

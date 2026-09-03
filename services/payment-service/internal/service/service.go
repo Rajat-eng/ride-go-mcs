@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"ride-sharing/services/payment-service/internal/domain"
@@ -77,4 +79,68 @@ func (s *paymentService) CreatePaymentSession(
 		StripeSessionID: sessionID,
 		CreatedAt:       time.Now(),
 	}, nil
+}
+
+// ValidatePaymentAmount validates payment amount is positive
+func ValidatePaymentAmount(amount float64) error {
+	if amount <= 0 {
+		return fmt.Errorf("payment amount must be greater than 0, got %f", amount)
+	}
+	return nil
+}
+
+// ValidatePaymentMethod validates payment method is supported
+func ValidatePaymentMethod(method string) error {
+	validMethods := map[string]bool{
+		"credit_card": true,
+		"debit_card":  true,
+		"upi":         true,
+		"wallet":      true,
+		"netbanking":  true,
+	}
+
+	method = strings.ToLower(strings.TrimSpace(method))
+	if method == "" {
+		return fmt.Errorf("payment method cannot be empty")
+	}
+
+	if !validMethods[method] {
+		return fmt.Errorf("unsupported payment method: %s", method)
+	}
+
+	return nil
+}
+
+// ValidateCurrency validates currency code (ISO 4217)
+func ValidateCurrency(currency string) error {
+	validCurrencies := map[string]bool{
+		"INR": true,
+		"USD": true,
+		"EUR": true,
+		"GBP": true,
+	}
+
+	currency = strings.ToUpper(strings.TrimSpace(currency))
+	if currency == "" {
+		return fmt.Errorf("currency cannot be empty")
+	}
+
+	if !validCurrencies[currency] {
+		return fmt.Errorf("unsupported currency: %s", currency)
+	}
+
+	return nil
+}
+
+// ValidateTransactionID validates transaction ID format
+func ValidateTransactionID(txnID string) error {
+	if txnID == "" {
+		return fmt.Errorf("transaction ID cannot be empty")
+	}
+
+	if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(txnID) {
+		return fmt.Errorf("invalid transaction ID format: %s", txnID)
+	}
+
+	return nil
 }

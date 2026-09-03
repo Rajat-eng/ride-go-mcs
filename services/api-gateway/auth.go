@@ -2,11 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"net/mail"
+	"regexp"
 	"ride-sharing/shared/env"
 	pb "ride-sharing/shared/proto/login"
 	"ride-sharing/shared/util"
+	"strings"
 	"time"
 )
 
@@ -183,4 +187,60 @@ func HandleGoogleAuth(w http.ResponseWriter, r *http.Request) {
 		AccessToken: resp.AccessToken,
 		User:        resp.User,
 	})
+}
+
+// ValidateEmail validates email format using RFC 5322 standard
+func ValidateEmail(email string) error {
+	if email == "" {
+		return fmt.Errorf("email cannot be empty")
+	}
+	_, err := mail.ParseAddress(email)
+	return err
+}
+
+// ValidatePassword validates password requirements (minimum 8 characters)
+func ValidatePassword(password string) error {
+	if password == "" {
+		return fmt.Errorf("password cannot be empty")
+	}
+	if len(password) < 8 {
+		return fmt.Errorf("password must be at least 8 characters long")
+	}
+	return nil
+}
+
+// ValidatePhoneNumber validates phone number format
+func ValidatePhoneNumber(phone string) error {
+	if phone == "" {
+		return fmt.Errorf("phone number cannot be empty")
+	}
+	// Remove common formatting characters
+	cleaned := strings.TrimSpace(phone)
+	cleaned = strings.ReplaceAll(cleaned, "+", "")
+	cleaned = strings.ReplaceAll(cleaned, "-", "")
+	cleaned = strings.ReplaceAll(cleaned, " ", "")
+
+	if !regexp.MustCompile(`^\d{10,}$`).MatchString(cleaned) {
+		return fmt.Errorf("phone number must contain at least 10 digits")
+	}
+	return nil
+}
+
+// ExtractIPAddress extracts client IP from X-Forwarded-For header or RemoteAddr
+func ExtractIPAddress(xForwardedFor, remoteAddr string) string {
+	if xForwardedFor != "" {
+		ips := strings.Split(xForwardedFor, ",")
+		if len(ips) > 0 {
+			return strings.TrimSpace(ips[0])
+		}
+	}
+
+	// Extract IP from remoteAddr (format: "ip:port")
+	if remoteAddr != "" {
+		if idx := strings.LastIndex(remoteAddr, ":"); idx != -1 {
+			return remoteAddr[:idx]
+		}
+	}
+
+	return ""
 }

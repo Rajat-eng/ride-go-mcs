@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -117,4 +119,26 @@ func (s *Service) SetTripChatPair(tripID, riderID, driverID string) error {
 // ClearActiveRider removes the driver→rider mapping when the trip ends.
 func (s *Service) ClearActiveRider(driverID string) {
 	s.rdb.Del(context.Background(), activeRiderKey(driverID))
+}
+
+// ValidateLocationCoordinates validates latitude and longitude ranges
+func ValidateLocationCoordinates(lat, lng float64) error {
+	if lat < -90.0 || lat > 90.0 {
+		return fmt.Errorf("latitude must be between -90 and 90, got %f", lat)
+	}
+	if lng < -180.0 || lng > 180.0 {
+		return fmt.Errorf("longitude must be between -180 and 180, got %f", lng)
+	}
+	return nil
+}
+
+// ValidateDriverID validates driver ID is not empty and contains only valid characters
+func ValidateDriverID(driverID string) error {
+	if driverID == "" {
+		return fmt.Errorf("driver ID cannot be empty")
+	}
+	if !regexp.MustCompile(`^[a-zA-Z0-9_-]+$`).MatchString(driverID) {
+		return fmt.Errorf("driver ID contains invalid characters: %s", driverID)
+	}
+	return nil
 }

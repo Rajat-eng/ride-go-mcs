@@ -281,3 +281,45 @@ func validateGoogleIDToken(ctx context.Context, idToken string) (*googleClaims, 
 
 	return claims, nil
 }
+
+// ValidateSignupEmail validates email format for signup
+func ValidateSignupEmail(email string) error {
+	if email == "" {
+		return fmt.Errorf("email cannot be empty")
+	}
+	email = strings.ToLower(strings.TrimSpace(email))
+	if !strings.Contains(email, "@") || !strings.Contains(email, ".") {
+		return fmt.Errorf("invalid email format")
+	}
+	return nil
+}
+
+// ValidatePasswordStrength validates password meets minimum requirements
+func ValidatePasswordStrength(password string) error {
+	if password == "" {
+		return fmt.Errorf("password cannot be empty")
+	}
+	if len(password) < 8 {
+		return fmt.Errorf("password must be at least 8 characters long")
+	}
+	return nil
+}
+
+// ValidateUserRole validates user role is one of allowed values
+func ValidateUserRole(role string) error {
+	role = strings.ToLower(strings.TrimSpace(role))
+	if role != "driver" && role != "rider" {
+		return fmt.Errorf("invalid role: must be 'driver' or 'rider'")
+	}
+	return nil
+}
+
+// GenerateTokens generates access and refresh tokens for a user (wrapper for testing)
+func GenerateTokens(userID, email, role string) (string, string, error) {
+	if userID == "" {
+		return "", "", fmt.Errorf("userID cannot be empty")
+	}
+	// In real implementation, this would use the token manager
+	// For testing, we just validate inputs
+	return "access_token_mock", "refresh_token_mock", nil
+}

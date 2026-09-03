@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: test-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - redis-data:/data
+    environment:
+      - REDIS_PASSWORD=
+    networks:
+      - test-network
+
+  mongodb:
+    image: mongo:6
+    container_name: test-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: testpassword
+      MONGO_INITDB_DATABASE: ride-sharing
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - mongodb-data:/data/db
+      - mongodb-config:/data/configdb
+    networks:
+      - test-network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: test-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpassword
+      POSTGRES_DB: ride-sharing
+      POSTGRES_INITDB_ARGS: "-c max_connections=100"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testuser -d ride-sharing"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - test-network
+
+volumes:
+  redis-data:
+    driver: local
+  mongodb-data:
+    driver: local
+  mongodb-config:
+    driver: local
+  postgres-data:
+    driver: local
+
+networks:
+  test-network:
+    driver: bridge
