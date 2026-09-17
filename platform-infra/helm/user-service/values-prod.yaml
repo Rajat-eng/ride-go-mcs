@@ -1,0 +1,5 @@
+image:
+  tag: "prod"
+replicaCount: 3
+pdb:
+  minAvailable: 2

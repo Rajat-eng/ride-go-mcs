@@ -1,0 +1,6 @@
+apiVersion: v2
+name: loki
+description: Loki log aggregation and querying
+type: application
+version: 1.0.0
+appVersion: "2.9.0"

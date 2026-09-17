@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ride-service.fullname" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "ride-service.fullname" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "ride-service.fullname" . }}
+    spec:
+      containers:
+        - name: ride-service
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.env.configMapName }}
+            - secretRef:
+                name: {{ .Values.env.secretName }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

@@ -1,3 +1,4 @@
+//go:build integration
 // +build integration
 
 package service
@@ -7,16 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
 	"ride-sharing/services/trip-service/internal/domain"
 	"ride-sharing/services/trip-service/internal/infrastructure"
 	"ride-sharing/shared/types"
+
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-// setupMongoTestContainer starts a MongoDB test container and returns a client
-// Note: This assumes you have testcontainers-go set up for MongoDB
 func setupMongoTestDB(ctx context.Context) (*mongo.Client, error) {
 	// Connect to local MongoDB for testing (ensure MongoDB is running)
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
@@ -57,13 +57,13 @@ func TestCreateTripIntegration(t *testing.T) {
 
 	// Create test fare
 	testFare := &domain.RideFareModel{
-		UserID:           "user123",
-		PickupLatitude:   12.9716,
-		PickupLongitude:  77.5946,
-		DropLatitude:     12.9550,
-		DropLongitude:    77.7010,
-		EstimatedFare:    250.0,
-		Currency:         "INR",
+		UserID:          "user123",
+		PickupLatitude:  12.9716,
+		PickupLongitude: 77.5946,
+		DropLatitude:    12.9550,
+		DropLongitude:   77.7010,
+		EstimatedFare:   250.0,
+		Currency:        "INR",
 	}
 
 	// Test: Create trip
@@ -157,14 +157,14 @@ func TestGetAndValidateFareIntegration(t *testing.T) {
 
 	userID := "user123"
 	testFare := &domain.RideFareModel{
-		ID:               primitive.NewObjectID(),
-		UserID:           userID,
-		PickupLatitude:   12.9716,
-		PickupLongitude:  77.5946,
-		DropLatitude:     12.9550,
-		DropLongitude:    77.7010,
-		EstimatedFare:    250.0,
-		Currency:         "INR",
+		ID:              primitive.NewObjectID(),
+		UserID:          userID,
+		PickupLatitude:  12.9716,
+		PickupLongitude: 77.5946,
+		DropLatitude:    12.9550,
+		DropLongitude:   77.7010,
+		EstimatedFare:   250.0,
+		Currency:        "INR",
 	}
 
 	// Setup: Insert test fare
