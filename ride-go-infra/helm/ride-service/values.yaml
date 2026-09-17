@@ -1,0 +1,11 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/example/ride-service
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080

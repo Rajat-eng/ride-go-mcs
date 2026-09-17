@@ -1,0 +1,16 @@
+image:
+  tag: "prod"
+
+replicaCount: 2
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1024Mi
+
+pdb:
+  enabled: true
+  minAvailable: 1

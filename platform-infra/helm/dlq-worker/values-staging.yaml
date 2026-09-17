@@ -1,0 +1,3 @@
+image:
+  tag: "staging"
+replicaCount: 1

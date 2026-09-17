@@ -1,0 +1,48 @@
+replicaCount: 1
+
+image:
+  repository: ghcr.io/ride-go/dlq-worker
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+  targetPort: 8080
+
+ingress:
+  enabled: false
+  className: nginx
+  annotations: {}
+  hosts:
+    - host: dlq-worker.local
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+env:
+  configMapName: dlq-worker-config
+  secretName: dlq-worker-secret
+
+hpa:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+pdb:
+  enabled: false
+  minAvailable: 1
+
+configMap: {}
+
+secrets: {}

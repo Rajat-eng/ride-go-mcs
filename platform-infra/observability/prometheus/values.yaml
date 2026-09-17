@@ -1,0 +1,33 @@
+replicaCount: 1
+
+image:
+  repository: prom/prometheus
+  tag: "v2.45.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 9090
+  targetPort: 9090
+
+retention:
+  days: 15
+  size: "10GB"
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+
+persistence:
+  enabled: true
+  size: 10Gi
+  storageClassName: standard
+
+ingress:
+  enabled: false
+  className: nginx
+  host: prometheus.local

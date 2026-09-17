@@ -1,0 +1,199 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: api-gateway-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ride-go/platform-infra
+    targetRevision: main
+    path: helm/api-gateway
+    helm:
+      releaseName: api-gateway
+      valuesFiles:
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: chat-service-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ride-go/platform-infra
+    targetRevision: main
+    path: helm/chat-service
+    helm:
+      releaseName: chat-service
+      valuesFiles:
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: driver-service-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ride-go/platform-infra
+    targetRevision: main
+    path: helm/driver-service
+    helm:
+      releaseName: driver-service
+      valuesFiles:
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dlq-worker-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ride-go/platform-infra
+    targetRevision: main
+    path: helm/dlq-worker
+    helm:
+      releaseName: dlq-worker
+      valuesFiles:
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: login-service-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ride-go/platform-infra
+    targetRevision: main
+    path: helm/login-service
+    helm:
+      releaseName: login-service
+      valuesFiles:
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: payment-service-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ride-go/platform-infra
+    targetRevision: main
+    path: helm/payment-service
+    helm:
+      releaseName: payment-service
+      valuesFiles:
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: trip-service-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ride-go/platform-infra
+    targetRevision: main
+    path: helm/trip-service
+    helm:
+      releaseName: trip-service
+      valuesFiles:
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ws-gateway-dev
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/ride-go/platform-infra
+    targetRevision: main
+    path: helm/ws-gateway
+    helm:
+      releaseName: ws-gateway
+      valuesFiles:
+        - values-dev.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

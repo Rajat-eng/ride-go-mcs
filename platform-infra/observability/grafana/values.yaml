@@ -1,0 +1,40 @@
+replicaCount: 1
+
+image:
+  repository: grafana/grafana
+  tag: "10.0.0"
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 3000
+  targetPort: 3000
+
+adminUser: admin
+adminPassword: "admin123"
+
+datasources:
+  prometheus:
+    url: http://prometheus:9090
+  loki:
+    url: http://loki:3100
+  tempo:
+    url: http://tempo:3100
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+persistence:
+  enabled: true
+  size: 5Gi
+  storageClassName: standard
+
+ingress:
+  enabled: false
+  className: nginx
+  host: grafana.local

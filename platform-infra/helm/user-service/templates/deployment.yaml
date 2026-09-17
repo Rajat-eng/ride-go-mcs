@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "user-service.fullname" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "user-service.fullname" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "user-service.fullname" . }}
+    spec:
+      containers:
+        - name: user-service
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.env.configMapName }}
+            - secretRef:
+                name: {{ .Values.env.secretName }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

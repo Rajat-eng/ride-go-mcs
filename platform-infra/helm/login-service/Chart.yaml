@@ -1,0 +1,6 @@
+apiVersion: v2
+name: login-service
+description: Helm chart for login-service
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

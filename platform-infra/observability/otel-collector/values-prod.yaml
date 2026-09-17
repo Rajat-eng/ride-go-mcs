@@ -1,0 +1,15 @@
+replicaCount: 1
+mode: daemonset
+resources:
+  requests:
+    cpu: 200m
+    memory: 400Mi
+  limits:
+    cpu: 500m
+    memory: 800Mi
+config:
+  processors:
+    memory_limiter:
+      check_interval: 5s
+      limit_mib: 512
+      spike_limit_mib: 128

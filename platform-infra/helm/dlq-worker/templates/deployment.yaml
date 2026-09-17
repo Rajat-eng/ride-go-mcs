@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dlq-worker.fullname" . }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ include "dlq-worker.fullname" . }}
+  template:
+    metadata:
+      labels:
+        app: {{ include "dlq-worker.fullname" . }}
+    spec:
+      containers:
+        - name: dlq-worker
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.env.configMapName }}
+            - secretRef:
+                name: {{ .Values.env.secretName }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

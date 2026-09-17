@@ -1,0 +1,13 @@
+replicaCount: 1
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 500m
+    memory: 1Gi
+retention:
+  days: 15
+  size: "10GB"
+persistence:
+  size: 10Gi
